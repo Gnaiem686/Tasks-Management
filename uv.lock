@@ -1402,7 +1402,17 @@ requires-dist = [
 [[package]]
 name = "workforce-risk-mcp"
 version = "0.1.0"
-source = { virtual = "services/workforce-risk-mcp" }
+source = { editable = "services/workforce-risk-mcp" }
+dependencies = [
+    { name = "mcp" },
+    { name = "workforce-risk-domain" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "mcp", specifier = ">=1.27,<2" },
+    { name = "workforce-risk-domain", editable = "domain" },
+]
 
 [[package]]
 name = "workforce-risk-platform"
