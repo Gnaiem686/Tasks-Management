@@ -1447,7 +1447,9 @@ dependencies = [
     { name = "httpx" },
     { name = "mcp" },
     { name = "uvicorn" },
+    { name = "workforce-contracts" },
     { name = "workforce-jira-mcp-client" },
+    { name = "workforce-persistence" },
     { name = "workforce-risk-domain" },
 ]
 
@@ -1457,7 +1459,9 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27,<1" },
     { name = "mcp", specifier = ">=1.27,<2" },
     { name = "uvicorn", specifier = ">=0.30,<1" },
+    { name = "workforce-contracts", editable = "packages/contracts" },
     { name = "workforce-jira-mcp-client", editable = "packages/jira-mcp-client" },
+    { name = "workforce-persistence", editable = "packages/persistence" },
     { name = "workforce-risk-domain", editable = "domain" },
 ]
 
@@ -1546,12 +1550,16 @@ version = "0.1.0"
 source = { editable = "services/workforce-risk-mcp" }
 dependencies = [
     { name = "mcp" },
+    { name = "workforce-contracts" },
+    { name = "workforce-persistence" },
     { name = "workforce-risk-domain" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "mcp", specifier = ">=1.27,<2" },
+    { name = "workforce-contracts", editable = "packages/contracts" },
+    { name = "workforce-persistence", editable = "packages/persistence" },
     { name = "workforce-risk-domain", editable = "domain" },
 ]
 

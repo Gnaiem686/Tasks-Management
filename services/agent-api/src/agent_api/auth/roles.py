@@ -1,9 +1,5 @@
 from __future__ import annotations
 
-from enum import StrEnum
+from workforce_contracts.auth import ApplicationRole
 
-
-class ApplicationRole(StrEnum):
-    VIEWER = "viewer"
-    MANAGER = "manager"
-    ADMINISTRATOR = "administrator"
+__all__ = ["ApplicationRole"]

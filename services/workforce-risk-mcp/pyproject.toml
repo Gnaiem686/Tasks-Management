@@ -4,7 +4,9 @@ version = "0.1.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "mcp>=1.27,<2",
+  "workforce-contracts",
   "workforce-risk-domain",
+  "workforce-persistence",
 ]
 
 [build-system]
@@ -15,4 +17,6 @@ build-backend = "hatchling.build"
 packages = ["src/workforce_risk_mcp"]
 
 [tool.uv.sources]
+workforce-contracts = { workspace = true }
 workforce-risk-domain = { workspace = true }
+workforce-persistence = { workspace = true }
