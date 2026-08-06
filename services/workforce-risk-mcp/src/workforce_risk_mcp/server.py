@@ -17,6 +17,12 @@ from workforce_risk_mcp.tools.score_overload import (
     ScoreOverloadRequest,
     score_overload,
 )
+from workforce_risk_mcp.tools.scoring import (
+    ScoreProjectDeliveryRequest,
+    ScoreTaskFitRequest,
+    score_project_delivery_tool,
+    score_task_fit_tool,
+)
 
 HOST = os.getenv("WORKFORCE_MCP_HOST", "127.0.0.1")
 PORT = int(os.getenv("WORKFORCE_MCP_PORT", "8001"))
@@ -39,6 +45,28 @@ def score_employee_overload_tool(request: dict[str, Any]) -> dict[str, Any]:
     validated = ScoreOverloadRequest.model_validate(request)
     response = score_overload(
         validated,
+        config_path=CONFIG_PATH,
+        service_environment=ENVIRONMENT,
+    )
+    return response.model_dump(mode="json")
+
+
+@mcp.tool(name="score_task_fit")
+def score_task_fit_mcp_tool(request: dict[str, Any]) -> dict[str, Any]:
+    """Calculate an auditable task-fit score from structured evidence."""
+    response = score_task_fit_tool(
+        ScoreTaskFitRequest.model_validate(request),
+        config_path=CONFIG_PATH,
+        service_environment=ENVIRONMENT,
+    )
+    return response.model_dump(mode="json")
+
+
+@mcp.tool(name="score_project_delivery")
+def score_project_delivery_mcp_tool(request: dict[str, Any]) -> dict[str, Any]:
+    """Calculate an auditable project-delivery score from structured evidence."""
+    response = score_project_delivery_tool(
+        ScoreProjectDeliveryRequest.model_validate(request),
         config_path=CONFIG_PATH,
         service_environment=ENVIRONMENT,
     )
