@@ -21,6 +21,7 @@ dev = [
   "pytest-cov>=5,<7",
   "pytest-socket>=0.7,<1",
   "ruff>=0.6,<1",
+  "types-pyyaml>=6,<7",
 ]
 
 [tool.pytest.ini_options]
@@ -49,4 +50,3 @@ python_version = "3.12"
 strict = true
 show_error_codes = true
 warn_unreachable = true
-

@@ -1,0 +1,37 @@
+environment: test
+jira:
+  site_url: https://example.atlassian.net
+  allowed_project_keys:
+    - TEST
+  mutation_project_key: null
+  allow_mutations: false
+  seed_project_keys: []
+  cleanup_project_keys: []
+  custom_fields:
+    blocker_category: customfield_10042
+    workforce_employee_id: customfield_10043
+    allowed_workforce_employee_ids:
+      - EMP-001
+      - EMP-002
+      - EMP-003
+      - EMP-004
+      - EMP-005
+      - EMP-006
+      - EMP-007
+aws:
+  region: us-east-1
+  report_bucket: workforce-risk-test-reports
+  notification_queue: workforce-risk-test-notifications
+auth:
+  api_key_hmac_pepper_ref: env://TEST_API_KEY_HMAC_PEPPER
+  allowed_roles:
+    - viewer
+    - manager
+    - administrator
+limits:
+  request_bytes: 65536
+  chat_requests_per_minute: 20
+  scan_requests_per_hour: 4
+scoring:
+  version: v1
+
