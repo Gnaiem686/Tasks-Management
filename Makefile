@@ -8,15 +8,15 @@ lint:
 	uv run ruff check .
 
 typecheck:
-	uv run mypy domain packages tests
+	uv run mypy domain packages services tests
 
 test-unit:
 	uv run pytest -m "not integration and not e2e and not infrastructure and not performance" --disable-socket --allow-unix-socket -q
 
 test-integration:
-	uv run pytest -m integration --enable-socket -q
+	uv run pytest -m integration -q
 
 ui-test:
-	uv run pytest -m ui --enable-socket -q
+	uv run pytest -m ui -q
 
 check: lint typecheck test-unit
