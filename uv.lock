@@ -11,6 +11,7 @@ members = [
     "workforce-notification-worker",
     "workforce-observability",
     "workforce-persistence",
+    "workforce-risk-domain",
     "workforce-risk-mcp",
     "workforce-risk-platform",
 ]
@@ -1382,6 +1383,21 @@ source = { virtual = "packages/observability" }
 name = "workforce-persistence"
 version = "0.1.0"
 source = { virtual = "packages/persistence" }
+
+[[package]]
+name = "workforce-risk-domain"
+version = "0.1.0"
+source = { editable = "domain" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2.9,<3" },
+    { name = "pyyaml", specifier = ">=6,<7" },
+]
 
 [[package]]
 name = "workforce-risk-mcp"

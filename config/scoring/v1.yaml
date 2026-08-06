@@ -1,0 +1,40 @@
+thresholds:
+  low_max: 29
+  medium_max: 54
+  high_max: 74
+employee_overload:
+  version: employee-overload-v1
+  max_evidence_age_hours: 24
+  factors:
+    utilization:
+      weight: 0.30
+      direction: increases_risk
+      normalization_cap: 2.0
+    overdue_work:
+      weight: 0.15
+      direction: increases_risk
+      normalization_cap: 4
+    blocked_work:
+      weight: 0.15
+      direction: increases_risk
+      normalization_cap: 3
+    priority_load:
+      weight: 0.10
+      direction: increases_risk
+      normalization_cap: 4
+    due_soon_load:
+      weight: 0.10
+      direction: increases_risk
+      normalization_cap: 4
+    active_task_count:
+      weight: 0.10
+      direction: increases_risk
+      normalization_cap: 10
+    concurrent_projects:
+      weight: 0.05
+      direction: increases_risk
+      normalization_cap: 4
+    stale_work:
+      weight: 0.05
+      direction: increases_risk
+      normalization_cap: 3
