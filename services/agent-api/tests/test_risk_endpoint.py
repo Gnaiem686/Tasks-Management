@@ -83,6 +83,13 @@ async def api_get(path: str, headers: dict[str, str] | None = None) -> Response:
         return await client.get(path, headers=headers)
 
 
+def dependency_returning(value: Any) -> Any:
+    async def dependency() -> Any:
+        return value
+
+    return dependency
+
+
 class JiraClient:
     async def get_issue(self, issue_key: str, *, correlation_id: str) -> Any:
         raw = json.loads(
@@ -140,8 +147,8 @@ async def test_overload_endpoint_returns_typed_result_and_propagates_correlation
 ):
     evidence = EvidenceProvider()
     scoring = ScoringClient()
-    app.dependency_overrides[get_evidence_provider] = lambda: evidence
-    app.dependency_overrides[get_scoring_client] = lambda: scoring
+    app.dependency_overrides[get_evidence_provider] = dependency_returning(evidence)
+    app.dependency_overrides[get_scoring_client] = dependency_returning(scoring)
 
     response = await api_get(
         "/api/v1/employees/EMP-002/overload-risk?project_key=WRD",
@@ -159,10 +166,10 @@ async def test_overload_endpoint_returns_typed_result_and_propagates_correlation
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_degraded_evidence_is_labeled_and_unpersisted() -> None:
-    app.dependency_overrides[get_evidence_provider] = lambda: EvidenceProvider(
-        degraded=True
+    app.dependency_overrides[get_evidence_provider] = dependency_returning(
+        EvidenceProvider(degraded=True)
     )
-    app.dependency_overrides[get_scoring_client] = lambda: ScoringClient()
+    app.dependency_overrides[get_scoring_client] = dependency_returning(ScoringClient())
 
     response = await api_get("/api/v1/employees/EMP-002/overload-risk?project_key=WRD")
 
@@ -175,10 +182,10 @@ async def test_degraded_evidence_is_labeled_and_unpersisted() -> None:
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_jira_timeout_returns_safe_degraded_error_with_correlation() -> None:
-    app.dependency_overrides[get_evidence_provider] = lambda: EvidenceProvider(
-        timeout=True
+    app.dependency_overrides[get_evidence_provider] = dependency_returning(
+        EvidenceProvider(timeout=True)
     )
-    app.dependency_overrides[get_scoring_client] = lambda: ScoringClient()
+    app.dependency_overrides[get_scoring_client] = dependency_returning(ScoringClient())
 
     response = await api_get(
         "/api/v1/employees/EMP-002/overload-risk?project_key=WRD",
@@ -198,9 +205,11 @@ async def test_jira_timeout_returns_safe_degraded_error_with_correlation() -> No
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_malformed_mcp_result_is_rejected_and_mutation_route_is_absent() -> None:
-    app.dependency_overrides[get_evidence_provider] = lambda: EvidenceProvider()
-    app.dependency_overrides[get_scoring_client] = lambda: ScoringClient(
-        {"score": "invented"}
+    app.dependency_overrides[get_evidence_provider] = dependency_returning(
+        EvidenceProvider()
+    )
+    app.dependency_overrides[get_scoring_client] = dependency_returning(
+        ScoringClient({"score": "invented"})
     )
     response = await api_get("/api/v1/employees/EMP-002/overload-risk?project_key=WRD")
 
@@ -218,8 +227,8 @@ async def test_malformed_mcp_result_is_rejected_and_mutation_route_is_absent() -
 @pytest.mark.asyncio
 async def test_forbidden_project_fails_before_evidence_call() -> None:
     evidence = EvidenceProvider()
-    app.dependency_overrides[get_evidence_provider] = lambda: evidence
-    app.dependency_overrides[get_scoring_client] = lambda: ScoringClient()
+    app.dependency_overrides[get_evidence_provider] = dependency_returning(evidence)
+    app.dependency_overrides[get_scoring_client] = dependency_returning(ScoringClient())
 
     response = await api_get(
         "/api/v1/employees/EMP-002/overload-risk?project_key=WORKFORCE-PROD"
@@ -239,8 +248,12 @@ async def test_insufficient_data_is_returned_without_numeric_claim() -> None:
         confidence="insufficient-data",
         missing_evidence=["available_capacity_hours"],
     )
-    app.dependency_overrides[get_evidence_provider] = lambda: EvidenceProvider()
-    app.dependency_overrides[get_scoring_client] = lambda: ScoringClient(response_data)
+    app.dependency_overrides[get_evidence_provider] = dependency_returning(
+        EvidenceProvider()
+    )
+    app.dependency_overrides[get_scoring_client] = dependency_returning(
+        ScoringClient(response_data)
+    )
 
     response = await api_get("/api/v1/employees/EMP-002/overload-risk?project_key=WRD")
 

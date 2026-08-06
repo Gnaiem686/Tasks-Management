@@ -10,5 +10,5 @@ TEMPLATE = Path(__file__).parents[1] / "web" / "templates" / "chat.html"
 
 
 @router.get("/", response_class=HTMLResponse, include_in_schema=False)
-def manager_ui() -> HTMLResponse:
+async def manager_ui() -> HTMLResponse:
     return HTMLResponse(TEMPLATE.read_text())
