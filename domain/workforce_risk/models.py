@@ -38,6 +38,35 @@ class EmployeeOverloadInput(BaseModel):
     evidence_references: dict[str, tuple[str, ...]] = Field(default_factory=dict)
 
 
+class TaskFitInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    task_id: str
+    environment: Literal["dev", "prod", "test"]
+    required_skill_gap: float | None = Field(default=None, ge=0, le=1)
+    difficulty_seniority_mismatch: float | None = Field(default=None, ge=0, le=1)
+    deadline_pressure: float | None = Field(default=None, ge=0, le=1)
+    dependency_impact: float | None = Field(default=None, ge=0, le=1)
+    task_criticality: float | None = Field(default=None, ge=0, le=1)
+    similar_task_evidence: float | None = Field(default=None, ge=0, le=1)
+    mentoring_review_support: float | None = Field(default=None, ge=0, le=1)
+    evidence_timestamp: AwareDatetime
+    evidence_references: dict[str, tuple[str, ...]] = Field(default_factory=dict)
+
+
+class ProjectDeliveryInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    project_id: str
+    environment: Literal["dev", "prod", "test"]
+    schedule_gap: float | None = Field(default=None, ge=0, le=1)
+    remaining_capacity_pressure: float | None = Field(default=None, ge=0, le=1)
+    blocked_overdue_work: float | None = Field(default=None, ge=0, le=1)
+    workload_concentration: float | None = Field(default=None, ge=0, le=1)
+    unplanned_work: float | None = Field(default=None, ge=0, le=1)
+    critical_weak_fit: float | None = Field(default=None, ge=0, le=1)
+    evidence_timestamp: AwareDatetime
+    evidence_references: dict[str, tuple[str, ...]] = Field(default_factory=dict)
+
+
 class FactorContribution(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     name: str

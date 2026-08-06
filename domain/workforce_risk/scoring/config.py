@@ -28,9 +28,24 @@ class OverloadConfiguration(BaseModel):
         return self
 
 
+class ScoreFamilyConfiguration(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    version: str
+    max_evidence_age_hours: float = Field(gt=0)
+    factors: dict[str, FactorConfiguration]
+
+    @model_validator(mode="after")
+    def validate_weights(self) -> ScoreFamilyConfiguration:
+        if abs(sum(factor.weight for factor in self.factors.values()) - 1.0) > 1e-9:
+            raise ValueError("score-family weights must sum to 1.0")
+        return self
+
+
 class ScoringConfiguration(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     employee_overload: OverloadConfiguration
+    task_fit: ScoreFamilyConfiguration
+    project_delivery: ScoreFamilyConfiguration
     thresholds: dict[str, int]
 
 

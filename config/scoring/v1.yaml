@@ -38,3 +38,24 @@ employee_overload:
       weight: 0.05
       direction: increases_risk
       normalization_cap: 3
+task_fit:
+  version: task-fit-v1
+  max_evidence_age_hours: 24
+  factors:
+    required_skill_gap: {weight: 0.30, direction: increases_risk, normalization_cap: 1}
+    difficulty_seniority_mismatch: {weight: 0.20, direction: increases_risk, normalization_cap: 1}
+    deadline_pressure: {weight: 0.15, direction: increases_risk, normalization_cap: 1}
+    dependency_impact: {weight: 0.10, direction: increases_risk, normalization_cap: 1}
+    task_criticality: {weight: 0.10, direction: increases_risk, normalization_cap: 1}
+    similar_task_evidence: {weight: 0.10, direction: inverse_risk, normalization_cap: 1}
+    mentoring_review_support: {weight: 0.05, direction: protective, normalization_cap: 1}
+project_delivery:
+  version: project-delivery-v1
+  max_evidence_age_hours: 24
+  factors:
+    schedule_gap: {weight: 0.25, direction: increases_risk, normalization_cap: 1}
+    remaining_capacity_pressure: {weight: 0.20, direction: increases_risk, normalization_cap: 1}
+    blocked_overdue_work: {weight: 0.20, direction: increases_risk, normalization_cap: 1}
+    workload_concentration: {weight: 0.15, direction: increases_risk, normalization_cap: 1}
+    unplanned_work: {weight: 0.10, direction: increases_risk, normalization_cap: 1}
+    critical_weak_fit: {weight: 0.10, direction: increases_risk, normalization_cap: 1}
