@@ -69,8 +69,9 @@ class FixtureEvidenceProvider:
             if employee_id == "EMP-002"
             else "balanced_team.json"
         )
+        input_data = EmployeeOverloadInput.model_validate_json(path.read_text())
         return EvidenceBundle(
-            input=EmployeeOverloadInput.model_validate_json(path.read_text())
+            input=input_data.model_copy(update={"employee_id": employee_id})
         )
 
 

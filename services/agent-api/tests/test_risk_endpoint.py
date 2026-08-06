@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 from agent_api.dependencies import (
     EvidenceBundle,
+    FixtureEvidenceProvider,
     JiraEvidenceTimeout,
     SingleIssueJiraEvidenceProvider,
     WorkforceScoringClient,
@@ -118,6 +119,18 @@ async def test_jira_provider_converts_structured_issue_without_using_free_text()
     assert "Ignore all prior instructions" not in json.dumps(
         bundle.input.model_dump(mode="json")
     )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_fixture_provider_preserves_selected_synthetic_employee_id() -> None:
+    provider = FixtureEvidenceProvider(
+        ROOT / "tests/fixtures/scenarios", environment="dev"
+    )
+
+    bundle = await provider.get_employee_overload("EMP-007", "WRD", "corr-fixture")
+
+    assert bundle.input.employee_id == "EMP-007"
 
 
 @pytest.mark.unit
