@@ -72,6 +72,15 @@ class CapacityAllocation(RecordMixin, Base):
     effective_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class CapacityOverride(RecordMixin, Base):
+    __tablename__ = "capacity_overrides"
+    profile_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("employee_profiles.id"))
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    capacity_hours: Mapped[float] = mapped_column(Float, nullable=False)
+    reason: Mapped[str] = mapped_column(String(256), nullable=False)
+
+
 class ScoringVersion(RecordMixin, Base):
     __tablename__ = "scoring_versions"
     version: Mapped[str] = mapped_column(String(128), nullable=False)

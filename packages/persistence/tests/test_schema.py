@@ -11,6 +11,7 @@ EXPECTED_TABLES = {
     "employee_profiles",
     "employee_skills",
     "capacity_allocations",
+    "capacity_overrides",
     "scoring_versions",
     "evidence_snapshots",
     "risk_results",

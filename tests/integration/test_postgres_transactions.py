@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import func, select, update
@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from workforce_persistence.database import Database
 from workforce_persistence.models import (
     AuditEvent,
+    CapacityOverride,
     EmployeeProfile,
     OutboxEvent,
     ReassignmentProposal,
@@ -212,6 +213,81 @@ async def test_failed_transaction_rolls_back_audit_and_business_state() -> None:
                     )
                 )
                 == 0
+            )
+    finally:
+        await database.close()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_profile_create_and_update_are_complete_audited_transactions() -> None:
+    database = Database(DATABASE_URL, pool_size=2, max_overflow=0)
+    employee_id = f"EMP-{uuid.uuid4().hex[:12]}"
+    now = datetime.now(UTC)
+    create_correlation = f"corr-create-{employee_id}"
+    update_correlation = f"corr-update-{employee_id}"
+    try:
+        async with database.transaction() as session:
+            repository = ProfileRepository(session)
+            created = await repository.create(
+                environment="test",
+                employee_id=employee_id,
+                role="Backend Engineer",
+                seniority="mid",
+                weekly_capacity_hours=40,
+                mentoring_available=True,
+                jira_account_id=None,
+                skills=(("Python", 4),),
+                allocations=(("WRD", 0.75),),
+                capacity_overrides=((now, now + timedelta(days=1), 24, "training"),),
+                actor_id="admin-test",
+                correlation_id=create_correlation,
+                created_at=now,
+            )
+            assert created.version == 1
+
+        async with database.transaction() as session:
+            repository = ProfileRepository(session)
+            updated = await repository.update_capacity_audited(
+                environment="test",
+                employee_id=employee_id,
+                expected_version=1,
+                capacity_hours=32,
+                actor_id="admin-test",
+                correlation_id=update_correlation,
+            )
+            assert updated is not None
+            assert updated.version == 2
+
+        async with database.transaction() as session:
+            profile = await ProfileRepository(session).get(
+                environment="test", employee_id=employee_id
+            )
+            assert profile is not None
+            assert profile.weekly_capacity_hours == 32
+            assert profile.skills == (("Python", 4),)
+            assert profile.allocations == (("WRD", 0.75),)
+            assert len(profile.capacity_overrides) == 1
+            assert (
+                await session.scalar(
+                    select(func.count())
+                    .select_from(AuditEvent)
+                    .where(AuditEvent.environment == "test")
+                    .where(
+                        AuditEvent.correlation_id.in_(
+                            [create_correlation, update_correlation]
+                        )
+                    )
+                )
+                == 2
+            )
+            assert (
+                await session.scalar(
+                    select(func.count())
+                    .select_from(CapacityOverride)
+                    .where(CapacityOverride.profile_id == profile.id)
+                )
+                == 1
             )
     finally:
         await database.close()
