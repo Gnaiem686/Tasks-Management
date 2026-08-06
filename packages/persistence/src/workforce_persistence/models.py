@@ -1,0 +1,240 @@
+from __future__ import annotations
+
+import uuid
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class RecordMixin:
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    environment: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+
+class ApiKeyPrincipal(RecordMixin, Base):
+    __tablename__ = "api_key_principals"
+    actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    display_label: Mapped[str] = mapped_column(String(128), nullable=False)
+    key_digest: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    project_scopes: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class EmployeeProfile(RecordMixin, Base):
+    __tablename__ = "employee_profiles"
+    employee_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    role: Mapped[str] = mapped_column(String(128), nullable=False)
+    seniority: Mapped[str] = mapped_column(String(64), nullable=False)
+    weekly_capacity_hours: Mapped[float] = mapped_column(Float, nullable=False)
+    mentoring_available: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    jira_account_id: Mapped[str | None] = mapped_column(String(256))
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    __table_args__ = (
+        UniqueConstraint("environment", "employee_id", name="uq_profiles_env_employee"),
+    )
+
+
+class EmployeeSkill(RecordMixin, Base):
+    __tablename__ = "employee_skills"
+    profile_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("employee_profiles.id"))
+    skill: Mapped[str] = mapped_column(String(128), nullable=False)
+    proficiency: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class CapacityAllocation(RecordMixin, Base):
+    __tablename__ = "capacity_allocations"
+    profile_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("employee_profiles.id"))
+    project_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    allocation_fraction: Mapped[float] = mapped_column(Float, nullable=False)
+    effective_from: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    effective_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ScoringVersion(RecordMixin, Base):
+    __tablename__ = "scoring_versions"
+    version: Mapped[str] = mapped_column(String(128), nullable=False)
+    configuration: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    activated_by: Mapped[str | None] = mapped_column(String(128))
+    __table_args__ = (
+        UniqueConstraint("environment", "version", name="uq_scoring_env_version"),
+    )
+
+
+class EvidenceSnapshot(RecordMixin, Base):
+    __tablename__ = "evidence_snapshots"
+    subject_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    subject_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(128), nullable=False)
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class RiskResultRecord(RecordMixin, Base):
+    __tablename__ = "risk_results"
+    snapshot_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("evidence_snapshots.id"))
+    score_family: Mapped[str] = mapped_column(String(64), nullable=False)
+    score: Mapped[int | None] = mapped_column(Integer)
+    level: Mapped[str | None] = mapped_column(String(32))
+    confidence: Mapped[str] = mapped_column(String(32), nullable=False)
+    scoring_version: Mapped[str] = mapped_column(String(128), nullable=False)
+    factors: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
+
+
+class CommentEvidence(RecordMixin, Base):
+    __tablename__ = "comment_evidence"
+    jira_comment_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    jira_issue_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    category: Mapped[str] = mapped_column(String(64), nullable=False)
+    author_reference: Mapped[str | None] = mapped_column(String(256))
+    author_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    attribution_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+
+
+class ReassignmentProposal(RecordMixin, Base):
+    __tablename__ = "reassignment_proposals"
+    task_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    expected_assignee: Mapped[str] = mapped_column(String(256), nullable=False)
+    proposed_assignee: Mapped[str] = mapped_column(String(256), nullable=False)
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    evidence_fingerprint: Mapped[str] = mapped_column(String(128), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('pending','approved','executing','executed_verified',"
+            "'execution_failed','uncertain','rejected','expired','stale')",
+            name="ck_reassignment_proposals_state",
+        ),
+        UniqueConstraint(
+            "environment",
+            "idempotency_key",
+            name="uq_reassignment_proposals_environment_idempotency",
+        ),
+    )
+
+
+class ApprovalDecision(RecordMixin, Base):
+    __tablename__ = "approval_decisions"
+    proposal_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("reassignment_proposals.id")
+    )
+    actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    decision: Mapped[str] = mapped_column(String(16), nullable=False)
+    correlation_id: Mapped[str] = mapped_column(String(128), nullable=False)
+
+
+class ProposalExecution(RecordMixin, Base):
+    __tablename__ = "proposal_executions"
+    proposal_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("reassignment_proposals.id")
+    )
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
+    external_correlation_id: Mapped[str | None] = mapped_column(String(128))
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+
+
+class Alert(RecordMixin, Base):
+    __tablename__ = "alerts"
+    subject_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
+    severity: Mapped[str] = mapped_column(String(32), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+
+class AlertOccurrence(RecordMixin, Base):
+    __tablename__ = "alert_occurrences"
+    alert_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("alerts.id"))
+    risk_result_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("risk_results.id"))
+
+
+class ReportMetadata(RecordMixin, Base):
+    __tablename__ = "report_metadata"
+    report_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    object_key: Mapped[str | None] = mapped_column(String(1024))
+    object_version: Mapped[str | None] = mapped_column(String(256))
+    checksum: Mapped[str | None] = mapped_column(String(128))
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+
+
+class ScanRun(RecordMixin, Base):
+    __tablename__ = "scan_runs"
+    scope: Mapped[str] = mapped_column(String(256), nullable=False)
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    failure_reason: Mapped[str | None] = mapped_column(Text)
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('queued','running','completed','completed_degraded',"
+            "'failed','skipped_duplicate')",
+            name="ck_scan_runs_state",
+        ),
+        UniqueConstraint(
+            "environment",
+            "idempotency_key",
+            name="uq_scan_runs_environment_idempotency",
+        ),
+    )
+
+
+class OutboxEvent(RecordMixin, Base):
+    __tablename__ = "outbox_events"
+    consumer_key: Mapped[str] = mapped_column(String(256), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    delivery_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    __table_args__ = (
+        UniqueConstraint("consumer_key", name="uq_outbox_events_consumer_key"),
+    )
+
+
+class AuditEvent(RecordMixin, Base):
+    __tablename__ = "audit_events"
+    sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    previous_hash: Mapped[str | None] = mapped_column(String(128))
+    event_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    action_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    actor_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    subject_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    prior_state: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    new_state: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    correlation_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    safe_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    __table_args__ = (
+        UniqueConstraint(
+            "environment", "sequence_number", name="uq_audit_env_sequence"
+        ),
+        UniqueConstraint("environment", "event_hash", name="uq_audit_env_hash"),
+    )
