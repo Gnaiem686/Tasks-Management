@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version-file: .python-version
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+        with:
+          version: "0.12.2"
+          enable-cache: true
+
+      - name: Install locked dependencies
+        run: uv sync --all-packages --frozen
+
+      - name: Prepare artifact directories
+        run: mkdir -p artifacts/{tests,security,sbom,terraform,kubernetes,deployment}
+
+      - name: Check formatting, lint, and types
+        run: |
+          make lint
+          make typecheck
+
+      - name: Scan repository for secrets
+        run: bash scripts/validation/check_no_secrets.sh
+
+      - name: Run isolated unit and security tests
+        run: >-
+          uv run pytest
+          -m "not integration and not e2e and not infrastructure and not performance"
+          --disable-socket
+          --junitxml=artifacts/tests/junit.xml
+          --cov=domain
+          --cov=packages
+          --cov-report=xml:artifacts/tests/coverage.xml
+          --cov-report=term-missing
+          -q
+
+      - name: Audit locked dependencies
+        run: |
+          uv export --quiet --all-packages --frozen --no-dev --no-emit-workspace --output-file artifacts/security/runtime-requirements.txt
+          uv run pip-audit --requirement artifacts/security/runtime-requirements.txt --format=json --output=artifacts/security/pip-audit.json
+
+      - name: Generate software bill of materials
+        run: >-
+          uv run cyclonedx-py environment
+          --output-format JSON
+          --output-file artifacts/sbom/cyclonedx.json
+
+      - name: Record not-yet-applicable artifact groups
+        run: |
+          printf '%s\n' '{"status":"not-applicable","phase":"repository-foundation"}' > artifacts/terraform/summary.json
+          printf '%s\n' '{"status":"not-applicable","phase":"repository-foundation"}' > artifacts/kubernetes/summary.json
+          printf '%s\n' '{"status":"not-applicable","phase":"repository-foundation"}' > artifacts/deployment/summary.json
+
+      - name: Publish coverage
+        uses: codecov/codecov-action@04b047e8bb82a0c002c8312c1c880fbc6a999d45 # v5
+        with:
+          files: artifacts/tests/coverage.xml
+          fail_ci_if_error: true
+          use_oidc: true
+
+      - name: Write workflow summary
+        if: always()
+        run: |
+          echo '## Workforce Risk CI' >> "$GITHUB_STEP_SUMMARY"
+          echo '- JUnit: `artifacts/tests/junit.xml`' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Coverage: `artifacts/tests/coverage.xml`' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Security audit: `artifacts/security/pip-audit.json`' >> "$GITHUB_STEP_SUMMARY"
+          echo '- SBOM: `artifacts/sbom/cyclonedx.json`' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Retain validation artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ci-validation-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14
