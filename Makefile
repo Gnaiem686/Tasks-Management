@@ -11,7 +11,7 @@ typecheck:
 	uv run mypy domain packages tests
 
 test-unit:
-	uv run pytest -m "not integration and not e2e and not infrastructure and not performance" --disable-socket -q
+	uv run pytest -m "not integration and not e2e and not infrastructure and not performance" --disable-socket --allow-unix-socket -q
 
 test-integration:
 	uv run pytest -m integration --enable-socket -q
