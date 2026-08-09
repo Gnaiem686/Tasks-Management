@@ -24,6 +24,7 @@ EXPECTED_TABLES = {
     "report_metadata",
     "scan_runs",
     "outbox_events",
+    "notification_deliveries",
     "audit_events",
 }
 

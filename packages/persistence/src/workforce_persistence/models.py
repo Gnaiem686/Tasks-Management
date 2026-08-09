@@ -268,6 +268,23 @@ class OutboxEvent(RecordMixin, Base):
     )
 
 
+class NotificationDelivery(RecordMixin, Base):
+    __tablename__ = "notification_deliveries"
+    consumer_key: Mapped[str] = mapped_column(String(256), nullable=False)
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_error: Mapped[str | None] = mapped_column(String(128))
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('pending','sending','sent','retrying','failed')",
+            name="ck_notification_deliveries_state",
+        ),
+        UniqueConstraint(
+            "environment", "consumer_key", name="uq_delivery_env_consumer"
+        ),
+    )
+
+
 class AuditEvent(RecordMixin, Base):
     __tablename__ = "audit_events"
     sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
