@@ -17,6 +17,6 @@ dist/
 build/
 *.egg-info/
 .terraform/
+.local-tools/
 *.tfstate
 *.tfstate.*
-
