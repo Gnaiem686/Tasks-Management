@@ -1,75 +1,133 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Workforce Risk Manager</title>
-    <link rel="stylesheet" href="/static/styles.css">
-    <script src="/static/chat.js" defer></script>
-  </head>
-  <body>
-    <header class="site-header">
-      <p class="eyebrow">Workforce delivery intelligence</p>
-      <h1>Workforce Risk Manager</h1>
-      <p>Review deterministic workload evidence before making a decision.</p>
-    </header>
-
-    <main>
-      <section class="panel" aria-labelledby="investigation-title">
-        <h2 id="investigation-title">Employee overload investigation</h2>
-        <form id="risk-form">
-          <div>
-            <label for="employee-select">Employee</label>
-            <select id="employee-select" name="employee" required>
-              <option value="EMP-001">Synthetic Employee 1</option>
-              <option value="EMP-002">Synthetic Employee 2</option>
-              <option value="EMP-003">Synthetic Employee 3</option>
-              <option value="EMP-004">Synthetic Employee 4</option>
-              <option value="EMP-005">Synthetic Employee 5</option>
-              <option value="EMP-006">Synthetic Employee 6</option>
-              <option value="EMP-007">Synthetic Employee 7</option>
-            </select>
-          </div>
-          <button type="submit">Analyze workload</button>
-        </form>
-        <p id="loading-state" role="status" aria-live="polite" hidden>
-          Loading deterministic evidence…
-        </p>
-        <p id="error-state" class="message error" aria-live="assertive" hidden></p>
-      </section>
-
-      <section id="risk-result" class="panel" aria-labelledby="risk-heading" hidden>
-        <div class="result-heading">
-          <div>
-            <p class="eyebrow">Deterministic result</p>
-            <h2 id="risk-heading">Overload risk</h2>
-          </div>
-          <p id="risk-label" class="risk-label" role="status"></p>
-        </div>
-        <dl class="summary-grid">
-          <div><dt>Score</dt><dd id="risk-score">—</dd></div>
-          <div><dt>Confidence</dt><dd id="risk-confidence">—</dd></div>
-          <div><dt>Evidence time</dt><dd id="evidence-time">—</dd></div>
-          <div><dt>Scoring version</dt><dd id="scoring-version">—</dd></div>
-        </dl>
-        <p id="degraded-warning" class="message warning" hidden></p>
-        <p id="freshness-warning" class="message warning" hidden></p>
-
-        <div class="table-scroll" tabindex="0" aria-label="Risk-factor table">
-          <table id="factor-table">
-            <caption>Contributing factors returned by the scoring service</caption>
-            <thead>
-              <tr>
-                <th scope="col">Factor</th>
-                <th scope="col">Value</th>
-                <th scope="col">Weight</th>
-                <th scope="col">Contribution</th>
-              </tr>
-            </thead>
-            <tbody id="factor-rows"></tbody>
-          </table>
-        </div>
-      </section>
-    </main>
-  </body>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Workforce Risk Manager</title>
+        <link rel="stylesheet" href="/static/styles.css">
+        <script src="/static/chat.js" defer></script>
+    </head>
+    <body>
+        <header class="site-header">
+            <p class="eyebrow">Workforce delivery intelligence</p>
+            <h1>Workforce Risk Manager</h1>
+            <p>Review deterministic workload evidence before making a decision.</p>
+        </header>
+        <main>
+            <section class="panel" aria-labelledby="access-title">
+                <h2 id="access-title">Manager access</h2>
+                <form id="access-form">
+                    <div class="grow">
+                        <label for="api-key">Environment API key</label>
+                        <input id="api-key" type="password" autocomplete="off" required>
+                    </div>
+                    <button type="submit">Use for this tab</button>
+                    <button id="clear-key" type="button" class="secondary">Clear key</button>
+                </form>
+                <p id="access-status" role="status" aria-live="polite">The key is retained only in this browser tab.</p>
+            </section>
+            <section class="panel" aria-labelledby="investigation-title">
+                <h2 id="investigation-title">Employee overload investigation</h2>
+                <form id="risk-form">
+                    <div>
+                        <label for="employee-select">Employee</label>
+                        <select id="employee-select" name="employee" required>
+                            <option value="EMP-001">Synthetic Employee 1</option>
+                            <option value="EMP-002">Synthetic Employee 2</option>
+                            <option value="EMP-003">Synthetic Employee 3</option>
+                            <option value="EMP-004">Synthetic Employee 4</option>
+                            <option value="EMP-005">Synthetic Employee 5</option>
+                            <option value="EMP-006">Synthetic Employee 6</option>
+                            <option value="EMP-007">Synthetic Employee 7</option>
+                        </select>
+                    </div>
+                    <button type="submit">Analyze workload</button>
+                </form>
+                <p id="loading-state" role="status" aria-live="polite" hidden>Loading deterministic evidence…</p>
+                <p id="error-state" class="message error" aria-live="assertive" hidden></p>
+            </section>
+            <section id="risk-result" class="panel" aria-labelledby="risk-heading" hidden>
+                <div class="result-heading">
+                    <div>
+                        <p class="eyebrow">Deterministic result</p>
+                        <h2 id="risk-heading">Overload risk</h2>
+                    </div>
+                    <p id="risk-label" class="risk-label" role="status"></p>
+                </div>
+                <dl class="summary-grid">
+                    <div>
+                        <dt>Score</dt>
+                        <dd id="risk-score">
+                            —
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>Confidence</dt>
+                        <dd id="risk-confidence">
+                            —
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>Evidence time</dt>
+                        <dd id="evidence-time">
+                            —
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>Scoring version</dt>
+                        <dd id="scoring-version">
+                            —
+                        </dd>
+                    </div>
+                </dl>
+                <p id="degraded-warning" class="message warning" hidden></p>
+                <p id="freshness-warning" class="message warning" hidden></p>
+                <div class="table-scroll" tabindex="0" aria-label="Risk-factor table">
+                    <table id="factor-table">
+                        <caption>Contributing factors returned by the scoring service</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Factor</th>
+                                <th scope="col">Value</th>
+                                <th scope="col">Weight</th>
+                                <th scope="col">Contribution</th>
+                            </tr>
+                        </thead>
+                        <tbody id="factor-rows">
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            <section class="panel" aria-labelledby="chat-title">
+                <h2 id="chat-title">Ask about the selected risk</h2>
+                <form id="chat-form">
+                    <div class="grow">
+                        <label for="manager-question">Question for the workforce-risk agent</label>
+                        <textarea id="manager-question"
+                                  rows="3"
+                                  maxlength="1000"
+                                  required
+                                  placeholder="Why is this employee unable to finish the task?"></textarea>
+                    </div>
+                    <button type="submit">Ask agent</button>
+                </form>
+                <p id="chat-loading" role="status" aria-live="polite" hidden>Investigating current evidence…</p>
+                <p id="chat-error" class="message error" aria-live="assertive" hidden></p>
+                <article id="chat-answer" class="chat-answer" aria-live="polite" hidden>
+                    <h3>Answer</h3>
+                    <p id="answer-summary"></p>
+                    <h4>Contributors</h4>
+                    <ul id="answer-causes">
+                    </ul>
+                    <h4>Recommendations</h4>
+                    <ul id="answer-recommendations">
+                    </ul>
+                    <h4>Evidence references</h4>
+                    <ul id="chat-citations">
+                    </ul>
+                    <p><strong>Support reference:</strong> <span id="chat-correlation"></span></p>
+                </article>
+            </section>
+        </main>
+    </body>
 </html>

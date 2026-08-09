@@ -3,6 +3,14 @@ const employeeSelect = document.querySelector("#employee-select");
 const loadingState = document.querySelector("#loading-state");
 const errorState = document.querySelector("#error-state");
 const resultPanel = document.querySelector("#risk-result");
+const accessForm = document.querySelector("#access-form");
+const apiKeyInput = document.querySelector("#api-key");
+const accessStatus = document.querySelector("#access-status");
+const chatForm = document.querySelector("#chat-form");
+const chatLoading = document.querySelector("#chat-loading");
+const chatError = document.querySelector("#chat-error");
+const chatAnswer = document.querySelector("#chat-answer");
+const tabKeyName = "workforceManagerApiKey";
 
 const labels = {
   low: "✓ Low risk",
@@ -61,6 +69,86 @@ function renderRisk(payload) {
   stale.textContent = stale.hidden ? "" : "Stale evidence: refresh before making a decision.";
   resultPanel.hidden = false;
 }
+
+function renderList(selector, values) {
+  const list = document.querySelector(selector);
+  list.replaceChildren();
+  for (const value of values) {
+    const item = document.createElement("li");
+    item.appendChild(document.createTextNode(value));
+    list.appendChild(item);
+  }
+}
+
+function renderAnswer(payload) {
+  const explanation = payload.explanation;
+  const guidance = payload.capability_guidance;
+  setText("#answer-summary", explanation ? explanation.summary : guidance);
+  renderList("#answer-causes", explanation ? explanation.root_causes : []);
+  renderList(
+    "#answer-recommendations",
+    explanation
+      ? explanation.recommendations.map((item) => `${item.action}: ${item.reason}`)
+      : [],
+  );
+  renderList("#chat-citations", explanation ? explanation.citations : []);
+  setText("#chat-correlation", payload.correlation_id || "unavailable");
+  chatAnswer.hidden = false;
+}
+
+accessForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  sessionStorage.setItem(tabKeyName, apiKeyInput.value);
+  apiKeyInput.value = "";
+  accessStatus.textContent = "API key ready for this tab.";
+});
+
+document.querySelector("#clear-key").addEventListener("click", () => {
+  sessionStorage.removeItem(tabKeyName);
+  apiKeyInput.value = "";
+  accessStatus.textContent = "API key cleared.";
+});
+
+chatForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const apiKey = sessionStorage.getItem(tabKeyName);
+  chatError.hidden = true;
+  chatAnswer.hidden = true;
+  if (!apiKey) {
+    chatError.textContent = "Enter the environment API key before asking.";
+    chatError.hidden = false;
+    return;
+  }
+  chatLoading.hidden = false;
+  try {
+    const response = await fetch("/api/v1/investigations?project_key=WRD", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        question: document.querySelector("#manager-question").value,
+        context: {
+          employee_id: employeeSelect.value,
+          project_key: "WRD",
+        },
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      const correlation = response.headers.get("X-Correlation-ID");
+      throw new Error(`Investigation failed. Reference: ${correlation || "unavailable"}`);
+    }
+    renderAnswer(payload);
+  } catch (error) {
+    chatError.textContent = error instanceof Error ? error.message : "Investigation failed.";
+    chatError.hidden = false;
+  } finally {
+    chatLoading.hidden = true;
+  }
+});
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();

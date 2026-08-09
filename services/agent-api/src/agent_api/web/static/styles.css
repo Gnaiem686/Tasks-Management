@@ -14,10 +14,14 @@ body { margin: 0; }
 .panel { margin-bottom: 1.5rem; padding: clamp(1rem, 3vw, 2rem); background: white; border: 1px solid #dce5ef; border-radius: 1rem; box-shadow: 0 .5rem 2rem rgb(24 45 74 / 8%); }
 form { display: flex; align-items: end; gap: 1rem; flex-wrap: wrap; }
 label { display: block; margin-bottom: .4rem; font-weight: 700; }
-select, button { min-height: 2.75rem; border-radius: .5rem; font: inherit; }
-select { min-width: 16rem; padding: .5rem; border: 1px solid #8799ad; }
+select, input, textarea, button { min-height: 2.75rem; border-radius: .5rem; font: inherit; }
+select, input, textarea { width: 100%; min-width: 16rem; padding: .5rem; border: 1px solid #8799ad; }
+textarea { resize: vertical; }
+.grow { flex: 1 1 24rem; }
 button { padding: .55rem 1rem; border: 0; color: white; background: #155eef; font-weight: 700; cursor: pointer; }
 button:hover { background: #0b49bd; }
+.secondary { color: #27415d; background: #e7eef7; }
+.secondary:hover { background: #cfdae8; }
 :focus-visible { outline: .2rem solid #f79009; outline-offset: .2rem; }
 .result-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: start; }
 .risk-label { padding: .5rem .75rem; border: 2px solid currentColor; border-radius: 2rem; font-weight: 800; }
@@ -34,4 +38,5 @@ dt { color: #52677d; } dd { margin: .25rem 0 0; font-weight: 800; }
 table { width: 100%; border-collapse: collapse; }
 caption { padding: 1rem 0; text-align: left; font-weight: 700; }
 th, td { padding: .75rem; border-bottom: 1px solid #dce5ef; text-align: left; }
+.chat-answer { margin-top: 1rem; padding: 1rem; border-left: .35rem solid #155eef; background: #f7f9fc; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }
