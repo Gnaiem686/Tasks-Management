@@ -353,22 +353,24 @@ development project key, and always reject `WORKFORCE-PROD`.
 Production smoke tests are read-only.
 
 The seeded development team contains seven synthetic workforce profiles,
-identified as `EMP-001` through `EMP-007`, in PostgreSQL. Jira tasks use a
-configured `Workforce Employee ID` custom field to associate work with those
-profiles. Profiles contain only approved work-planning data such as role,
+identified as `EMP-001` through `EMP-007`, in PostgreSQL. Synthetic Jira tasks
+use exactly one structured label in the form `workforce-employee:EMP-00N` to
+associate work with those profiles; seed validation rejects missing, malformed,
+or multiple workforce labels. Profiles contain only approved work-planning data such as role,
 seniority, documented skills/proficiency, capacity, allocation, mentoring
 availability, and optional Jira account mapping.
 
 Seven synthetic profiles do not require seven Atlassian accounts. Two real,
 synthetic Jira development accounts are retained for the controlled assignee
 mutation proof: the expected current assignee and approved target assignee.
-General risk analysis uses `Workforce Employee ID`; the live external-write
+General risk analysis uses the structured workforce label; the live external-write
 demonstration updates Jira's real `assignee` field only between those two test
 accounts and verifies the returned `accountId`.
 
 The versioned dev seed/reset workflow automatically prepares profiles, tasks,
 estimates, remaining estimates, deadlines, priorities, required skills,
-difficulty, dependencies, blockers, structured custom fields, safe comment
+difficulty, dependencies, blockers, the structured workforce label, configured
+custom fields such as `Blocker Category`, safe comment
 fixtures, workload distribution, similar-task fixtures, and suitable/unsuitable
 reassignment candidates. Seed operations are idempotent and scenario-tagged;
 cleanup deletes only records owned by that scenario and refuses production.
@@ -1763,8 +1765,8 @@ decisions and identifies the validations or choices that remain open.
 9. **Selected:** application-managed role/environment/project-scoped API keys
    replace Cognito for the MVP. A production identity provider remains a future
    hardening path if real organizational users are introduced.
-10. **Selected:** seven synthetic workforce profiles and a structured Jira
-    `Workforce Employee ID` field model the team; two real synthetic Jira
+10. **Selected:** seven synthetic workforce profiles and the structured Jira
+    label convention `workforce-employee:EMP-00N` model the team; two real synthetic Jira
     accounts are used only for the controlled assignee-mutation demonstration.
 11. **Selected:** deterministic scenario progression is external test tooling
     executed from a workstation or `run-scenario.yml`. Kubernetes retains only

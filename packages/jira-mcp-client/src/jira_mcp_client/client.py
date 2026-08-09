@@ -69,6 +69,7 @@ class JiraEvidenceClient:
             "timeoriginalestimate",
             "timeestimate",
             "updated",
+            "labels",
             "issuelinks",
             "description",
             "comment",

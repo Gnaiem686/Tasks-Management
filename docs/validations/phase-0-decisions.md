@@ -41,8 +41,8 @@ The implementation configuration created in Task 1.2 must enforce:
 
 - `allowed_project_keys` for dev contains only `WRD`;
 - `mutation_project_key` for dev is exactly `WRD`;
-- `WORKFORCE-DEV` is not created or configured unless a later approved change
-  replaces this decision and repeats all MCP smoke tests;
+- no replacement project is created or configured unless a later approved
+  change replaces this decision and repeats all MCP smoke tests;
 - `WORKFORCE-PROD` is production-scoped, read-only, and forbidden to seed,
   clean, or mutate;
 - dev identities, credentials, simulator tooling, and cleanup tooling cannot

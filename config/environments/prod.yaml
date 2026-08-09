@@ -9,15 +9,15 @@ jira:
   cleanup_project_keys: []
   custom_fields:
     blocker_category: customfield_10042
-    workforce_employee_id: env://JIRA_WORKFORCE_EMPLOYEE_FIELD_ID
-    allowed_workforce_employee_ids:
-      - EMP-001
-      - EMP-002
-      - EMP-003
-      - EMP-004
-      - EMP-005
-      - EMP-006
-      - EMP-007
+  workforce_label_prefix: "workforce-employee:"
+  allowed_workforce_employee_ids:
+    - EMP-001
+    - EMP-002
+    - EMP-003
+    - EMP-004
+    - EMP-005
+    - EMP-006
+    - EMP-007
 aws:
   region: us-east-1
   report_bucket: workforce-risk-prod-reports
@@ -34,4 +34,3 @@ limits:
   scan_requests_per_hour: 4
 scoring:
   version: v1
-

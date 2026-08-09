@@ -71,7 +71,12 @@ class FixtureEvidenceProvider:
         )
         input_data = EmployeeOverloadInput.model_validate_json(path.read_text())
         return EvidenceBundle(
-            input=input_data.model_copy(update={"employee_id": employee_id})
+            input=input_data.model_copy(
+                update={
+                    "employee_id": employee_id,
+                    "evidence_timestamp": datetime.now(UTC),
+                }
+            )
         )
 
 

@@ -58,34 +58,12 @@ class StrictConfigModel(BaseModel):
 
 class JiraCustomFields(StrictConfigModel):
     blocker_category: str = Field(min_length=1)
-    workforce_employee_id: str = Field(min_length=1)
-    allowed_workforce_employee_ids: list[str]
 
     @field_validator("blocker_category")
     @classmethod
     def validate_blocker_field(cls, value: str) -> str:
         if not value.startswith("customfield_"):
             raise ValueError("blocker_category must be a raw Jira custom-field ID")
-        return value
-
-    @field_validator("workforce_employee_id")
-    @classmethod
-    def validate_workforce_field(cls, value: str) -> str:
-        if not (
-            value.startswith("customfield_")
-            or value.startswith("env://JIRA_WORKFORCE_EMPLOYEE_FIELD_ID")
-        ):
-            raise ValueError(
-                "workforce_employee_id must be a raw Jira custom-field ID or "
-                "the explicit unresolved environment reference"
-            )
-        return value
-
-    @field_validator("allowed_workforce_employee_ids")
-    @classmethod
-    def validate_employee_ids(cls, value: list[str]) -> list[str]:
-        if tuple(value) != EXPECTED_EMPLOYEE_IDS:
-            raise ValueError("allowed workforce employee IDs must be EMP-001–EMP-007")
         return value
 
 
@@ -97,6 +75,22 @@ class JiraConfig(StrictConfigModel):
     seed_project_keys: list[str]
     cleanup_project_keys: list[str]
     custom_fields: JiraCustomFields
+    workforce_label_prefix: str
+    allowed_workforce_employee_ids: list[str]
+
+    @field_validator("workforce_label_prefix")
+    @classmethod
+    def validate_workforce_label_prefix(cls, value: str) -> str:
+        if value != "workforce-employee:":
+            raise ValueError("workforce label prefix must be workforce-employee:")
+        return value
+
+    @field_validator("allowed_workforce_employee_ids")
+    @classmethod
+    def validate_employee_ids(cls, value: list[str]) -> list[str]:
+        if tuple(value) != EXPECTED_EMPLOYEE_IDS:
+            raise ValueError("allowed workforce employee IDs must be EMP-001–EMP-007")
+        return value
 
     @model_validator(mode="after")
     def validate_scope(self) -> Self:

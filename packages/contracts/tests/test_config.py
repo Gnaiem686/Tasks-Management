@@ -24,9 +24,9 @@ def valid_config(environment: str = "dev") -> dict[str, object]:
             "cleanup_project_keys": ["WRD"] if environment == "dev" else [],
             "custom_fields": {
                 "blocker_category": "customfield_10042",
-                "workforce_employee_id": "env://JIRA_WORKFORCE_EMPLOYEE_FIELD_ID",
-                "allowed_workforce_employee_ids": EMPLOYEE_IDS,
             },
+            "workforce_label_prefix": "workforce-employee:",
+            "allowed_workforce_employee_ids": EMPLOYEE_IDS,
         },
         "aws": {
             "region": "us-east-1",
@@ -74,12 +74,20 @@ def test_rejects_production_project_seed_or_cleanup(operation: str) -> None:
         EnvironmentConfig.model_validate(config)
 
 
-@pytest.mark.parametrize("field", ["blocker_category", "workforce_employee_id"])
+@pytest.mark.parametrize("field", ["blocker_category"])
 def test_rejects_missing_required_custom_field_mapping(field: str) -> None:
     config = valid_config()
     del config["jira"]["custom_fields"][field]  # type: ignore[index]
 
     with pytest.raises(ConfigurationError):
+        EnvironmentConfig.model_validate(config)
+
+
+def test_rejects_unsafe_workforce_label_prefix() -> None:
+    config = valid_config()
+    config["jira"]["workforce_label_prefix"] = "employee"  # type: ignore[index]
+
+    with pytest.raises(ConfigurationError, match="workforce label prefix"):
         EnvironmentConfig.model_validate(config)
 
 
@@ -108,4 +116,5 @@ def test_loads_checked_in_dev_configuration() -> None:
 
     assert config.environment == "dev"
     assert config.jira.mutation_project_key == "WRD"
-    assert config.jira.custom_fields.allowed_workforce_employee_ids == EMPLOYEE_IDS
+    assert config.jira.workforce_label_prefix == "workforce-employee:"
+    assert config.jira.allowed_workforce_employee_ids == EMPLOYEE_IDS

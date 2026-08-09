@@ -37,7 +37,8 @@ The following checks remain mandatory before their dependent work can be
 considered complete:
 
 - automated Jira scope, restart, failure, rotation, and cleanup validation;
-- `Workforce Employee ID` field attachment and structured MCP verification;
+- automated verification of the approved `workforce-employee:EMP-00N` label
+  convention across the seeded `WRD` scenario;
 - Amazon Bedrock regional access and deterministic fallback validation;
 - compatible platform version selection and exact pins;
 - provisional HPA measurement contract;

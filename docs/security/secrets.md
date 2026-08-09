@@ -18,7 +18,7 @@ The following values are secrets:
 Unit tests run without real credentials and with network access disabled. Test
 fixtures use unmistakably synthetic placeholder values.
 
-The Jira `Workforce Employee ID` raw field identifier remains an explicit
-deferred validation. Dev and prod reference
-`JIRA_WORKFORCE_EMPLOYEE_FIELD_ID`; services must fail closed if the reference
-cannot be resolved to a `customfield_<number>` value.
+Synthetic workforce linkage is not a secret and uses the validated structured
+label convention `workforce-employee:EMP-00N`. Configuration allowlists the
+prefix and exactly `EMP-001` through `EMP-007`; no custom-field identifier or
+employee account credential is required for general task linkage.

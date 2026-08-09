@@ -72,6 +72,54 @@ def test_blocker_category_never_comes_from_prompt_like_free_text() -> None:
 
 
 @pytest.mark.unit
+def test_normalizes_allowlisted_workforce_labels_as_structured_evidence() -> None:
+    raw = load_response()
+    fields = raw["data"]["fields"]
+    fields["timeoriginalestimate"] = None
+    fields["timeestimate"] = None
+    fields["labels"] = [
+        "workforce-employee:EMP-006",
+        "workforce-estimate-hours:30",
+        "workforce-remaining-hours:24",
+        "workforce-difficulty:5",
+        "workforce-skill:postgresql",
+        "workforce-skill:python",
+        "workforce-evidence:complete",
+    ]
+
+    evidence = normalize_issue(
+        raw,
+        expected_environment="dev",
+        expected_correlation_id="corr-wrd-1",
+        custom_fields={"blocker_category": "customfield_10042"},
+    )
+
+    assert evidence.workforce_employee_id == "EMP-006"
+    assert evidence.original_estimate_seconds == 108000
+    assert evidence.remaining_estimate_seconds == 86400
+    assert evidence.difficulty == 5
+    assert evidence.required_skills == ("postgresql", "python")
+    assert evidence.structured_evidence_complete is True
+
+
+@pytest.mark.unit
+def test_rejects_multiple_workforce_employee_labels() -> None:
+    raw = load_response()
+    raw["data"]["fields"]["labels"] = [
+        "workforce-employee:EMP-001",
+        "workforce-employee:EMP-002",
+    ]
+
+    with pytest.raises(JiraNormalizationError, match="workforce employee"):
+        normalize_issue(
+            raw,
+            expected_environment="dev",
+            expected_correlation_id="corr-wrd-1",
+            custom_fields={"blocker_category": "customfield_10042"},
+        )
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize(
     ("mutation", "exception"),
     [

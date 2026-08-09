@@ -223,8 +223,8 @@ one reassignment target.
 - [ ] Discover the Jira resource and assert only approved project keys are accepted by the application-side allowlist.
 - [ ] Search the selected dev project with JQL and read a synthetic issue.
 - [ ] Verify standard fields and mapped `Blocker Category` through structured MCP output.
-- [ ] Verify `Workforce Employee ID` is structured and supports values
-  `EMP-001` through `EMP-007` without requiring seven Jira accounts.
+- [ ] Verify the structured label convention `workforce-employee:EMP-00N`
+  supports `EMP-001` through `EMP-007` without requiring seven Jira accounts.
 - [ ] Record the Jira Free permission limitation and prove the application-side
   site/project allowlist rejects every nonconfigured scope.
 - [ ] Resolve a synthetic account and perform one controlled assignee update.
@@ -478,7 +478,7 @@ uv run pytest tests/test_repository_layout.py -q
   `config/environments/dev.yaml` as the sole dev mutation scope.
 - [ ] Store only secret references, never secret values.
 - [ ] Set `custom_fields.blocker_category` to the environment-specific ID established in Phase 0.
-- [ ] Set `custom_fields.workforce_employee_id` and the seven permitted
+- [ ] Set the `workforce-employee:` label prefix and the seven permitted
   `EMP-001`–`EMP-007` values from the approved seed contract.
 - [ ] Configure API-key HMAC pepper references, cache TTL, role, environment,
   and Jira-project scope rules without storing any raw key.
@@ -1220,8 +1220,9 @@ scenarios before agent behavior is added.
 - Idempotent re-seed/reset, scenario/version ownership tags, cleanup of only
   owned records, exact configured-dev allowlist, and unconditional production
   refusal.
-- Prove general tasks use `Workforce Employee ID` rather than real Jira
-  accounts; only the controlled write fixture uses current/target `accountId`.
+- Prove general tasks use exactly one `workforce-employee:EMP-00N` label rather
+  than real Jira accounts; only the controlled write fixture uses
+  current/target `accountId`.
 - Prove runtime code does not call Jira REST. If MCP is insufficient or
   inefficient for bulk preparation, official REST is reachable only from these
   dev-administration scripts and inherits project/prod guards.
@@ -1234,38 +1235,39 @@ scenarios before agent behavior is added.
 
 **Detailed implementation steps:**
 
-- [ ] Define the versioned seven-person scenario fixture with known expected
+- [x] Define the versioned seven-person scenario fixture with known expected
   deterministic scoring outcomes.
-- [ ] Seed authoritative PostgreSQL profiles, skills, capacities, allocations,
+- [x] Seed authoritative PostgreSQL profiles, skills, capacities, allocations,
   mentoring availability, and optional Jira mappings transactionally.
-- [ ] Discover Jira create metadata and verify `Blocker Category` and
-  `Workforce Employee ID` before writing fixtures.
-- [ ] Create/update scenario-owned Jira issues, estimates, deadlines,
+- [x] Discover Jira create metadata and verify `Blocker Category` plus editable
+  Jira labels before writing fixtures.
+- [x] Create/update scenario-owned Jira issues, estimates, deadlines,
   priorities, dependencies, blockers, and structured evidence idempotently.
-- [ ] Implement `advance_scenario.py` as an explicit deterministic state
+- [x] Implement `advance_scenario.py` as an explicit deterministic state
   transition over Jira evidence with logical timestamps and a stored step ID.
-- [ ] Prefer Rovo MCP for supported setup calls; isolate any necessary official
+- [x] Prefer Rovo MCP for supported setup calls; isolate any necessary official
   REST bulk call inside the guarded script client, never the runtime adapter.
-- [ ] Verify every expected profile, issue, custom field, relationship, and
-  controlled current/target assignee mapping after seeding.
-- [ ] Implement `evaluate_results.py` to call the dev Agent API after its real
+- [x] Verify every expected profile, issue, structured workforce label, custom
+  field, relationship, and controlled current/target assignee mapping after
+  seeding.
+- [x] Implement `evaluate_results.py` to call the dev Agent API after its real
   Rovo MCP scan and compare returned findings, score ranges, confidence,
   evidence references, and alerts with expected fixture outcomes.
-- [ ] Add `run-scenario.yml` with manual dispatch and optional bounded schedule,
+- [x] Add `run-scenario.yml` with manual dispatch and optional bounded schedule,
   protected simulation secrets, scenario/step inputs, concurrency control,
   retained results, and no AWS/Kubernetes deployment permissions.
-- [ ] Implement reset and cleanup from scenario ownership tags and refuse when
+- [x] Implement reset and cleanup from scenario ownership tags and refuse when
   site, project, environment, or production guard does not match exactly.
 
 **Commands to run:**
 
 ```bash
 uv run pytest tests/integration/test_synthetic_seed.py tests/security/test_seed_cleanup_guards.py -q
-uv run python scripts/jira/seed_dev.py --scenario tests/fixtures/scenarios/seven_employee_team.json
-uv run python scripts/jira/verify_seed.py --scenario tests/fixtures/scenarios/seven_employee_team.json
-uv run python scripts/jira/advance_scenario.py --scenario tests/fixtures/scenarios/seven_employee_team.json --step overload_and_blocker
-uv run python scripts/scenario/evaluate_results.py --scenario tests/fixtures/scenarios/seven_employee_team.json --step overload_and_blocker
-uv run python scripts/jira/reset_dev.py --scenario tests/fixtures/scenarios/seven_employee_team.json
+uv run python scripts/jira/seed_dev.py --scenario tests/fixtures/scenarios/seven_employee_team.json --live-mcp
+uv run python scripts/jira/verify_seed.py --scenario tests/fixtures/scenarios/seven_employee_team.json --live-mcp
+uv run python scripts/jira/advance_scenario.py --scenario tests/fixtures/scenarios/seven_employee_team.json --live-mcp --step overload_and_blocker
+uv run python scripts/scenario/evaluate_results.py --scenario tests/fixtures/scenarios/seven_employee_team.json --step overload_and_blocker --agent-url "$AGENT_DEV_URL" --api-key "$AGENT_DEV_API_KEY"
+uv run python scripts/jira/reset_dev.py --scenario tests/fixtures/scenarios/seven_employee_team.json --live-mcp
 actionlint .github/workflows/run-scenario.yml
 ```
 
@@ -3072,7 +3074,7 @@ uv run pytest domain/workforce_risk/tests/test_weekly_report.py -q
 - [x] Tasks 2.5, 4.3, 6.3, and 8.1 implement one FastAPI-served lightweight UI;
   no React/Vite/Node toolchain, frontend container, or frontend workload remains.
 - [x] Task 3.6 automatically seeds exactly seven synthetic profiles and Jira
-  task data, uses `Workforce Employee ID` for general analysis, retains only two
+  task data, uses `workforce-employee:EMP-00N` labels for general analysis, retains only two
   real synthetic Jira accounts for the controlled assignee write, and refuses
   production cleanup or mutation.
 - [x] Task 3.6 runs scenario progression/evaluation only from a workstation or

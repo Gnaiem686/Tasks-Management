@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "scenario_id": "seven-person-v1",
+  "ownership_tag": "workforce-scenario:seven-person:v1",
+  "environment": "dev",
+  "project_key": "WRD",
+  "anchor_date": "2026-08-10",
+  "profiles": [
+    {"employee_id":"EMP-001","role":"Backend Engineer","seniority":"senior","skills":{"python":5,"aws":4},"capacity_hours":40,"allocation":1.0,"mentoring_available":true,"jira_account_ref":"current_assignee"},
+    {"employee_id":"EMP-002","role":"Backend Engineer","seniority":"mid","skills":{"python":4,"postgresql":4},"capacity_hours":40,"allocation":1.0,"mentoring_available":true,"jira_account_ref":"target_assignee"},
+    {"employee_id":"EMP-003","role":"Frontend Engineer","seniority":"mid","skills":{"javascript":4,"accessibility":3},"capacity_hours":40,"allocation":1.0,"mentoring_available":false},
+    {"employee_id":"EMP-004","role":"DevOps Engineer","seniority":"senior","skills":{"kubernetes":5,"terraform":4},"capacity_hours":40,"allocation":1.0,"mentoring_available":true},
+    {"employee_id":"EMP-005","role":"QA Engineer","seniority":"mid","skills":{"testing":5,"python":3},"capacity_hours":32,"allocation":1.0,"mentoring_available":false},
+    {"employee_id":"EMP-006","role":"Backend Engineer","seniority":"junior","skills":{"python":2,"postgresql":2},"capacity_hours":40,"allocation":1.0,"mentoring_available":false},
+    {"employee_id":"EMP-007","role":"Delivery Lead","seniority":"lead","skills":{"planning":5,"mentoring":5},"capacity_hours":24,"allocation":1.0,"mentoring_available":true}
+  ],
+  "issues": [
+    {"external_id":"primary-risk-task","summary":"Implement login token refresh","workforce_employee_id":"EMP-001","estimate_hours":24,"remaining_hours":22,"due_offset_days":2,"priority":"high","difficulty":5,"required_skills":["python","security"],"dependencies":[],"blocker_category":null,"labels":["workforce-scenario:seven-person:v1","workforce-employee:EMP-001","workforce-fixture:primary"]},
+    {"external_id":"api-report","summary":"Build risk report API","workforce_employee_id":"EMP-001","estimate_hours":20,"remaining_hours":18,"due_offset_days":3,"priority":"high","difficulty":4,"required_skills":["python"],"dependencies":["primary-risk-task"],"labels":["workforce-scenario:seven-person:v1","workforce-employee:EMP-001"]},
+    {"external_id":"schema-change","summary":"Add audit schema","workforce_employee_id":"EMP-002","estimate_hours":16,"remaining_hours":8,"due_offset_days":6,"priority":"medium","difficulty":3,"required_skills":["postgresql"],"dependencies":[],"labels":["workforce-scenario:seven-person:v1","workforce-employee:EMP-002"]},
+    {"external_id":"manager-ui","summary":"Build manager result view","workforce_employee_id":"EMP-003","estimate_hours":20,"remaining_hours":12,"due_offset_days":7,"priority":"medium","difficulty":3,"required_skills":["javascript","accessibility"],"dependencies":["api-report"],"labels":["workforce-scenario:seven-person:v1","workforce-employee:EMP-003"]},
+    {"external_id":"cluster-observability","summary":"Instrument cluster health","workforce_employee_id":"EMP-004","estimate_hours":18,"remaining_hours":9,"due_offset_days":8,"priority":"medium","difficulty":4,"required_skills":["kubernetes"],"dependencies":[],"labels":["workforce-scenario:seven-person:v1","workforce-employee:EMP-004"]},
+    {"external_id":"integration-tests","summary":"Add MCP integration tests","workforce_employee_id":"EMP-005","estimate_hours":16,"remaining_hours":10,"due_offset_days":7,"priority":"high","difficulty":3,"required_skills":["testing","python"],"dependencies":["api-report"],"labels":["workforce-scenario:seven-person:v1","workforce-employee:EMP-005"]},
+    {"external_id":"complex-migration","summary":"Implement complex database migration","workforce_employee_id":"EMP-006","estimate_hours":30,"remaining_hours":30,"due_offset_days":3,"priority":"critical","difficulty":5,"required_skills":["postgresql","python"],"dependencies":[],"labels":["workforce-scenario:seven-person:v1","workforce-employee:EMP-006"]},
+    {"external_id":"release-plan","summary":"Prepare release review gate","workforce_employee_id":"EMP-007","estimate_hours":10,"remaining_hours":6,"due_offset_days":9,"priority":"medium","difficulty":2,"required_skills":["planning"],"dependencies":["integration-tests"],"labels":["workforce-scenario:seven-person:v1","workforce-employee:EMP-007"]}
+  ],
+  "steps": [
+    {"name":"balanced","issue_updates":{"primary-risk-task":{"remaining_hours":10,"blocker_category":null}},"expected_findings":["balanced_team"]},
+    {"name":"overload_and_blocker","issue_updates":{"primary-risk-task":{"remaining_hours":30,"blocker_category":"Need clarification"}},"expected_findings":["employee_overload","blocked_work"]},
+    {"name":"weak_fit","issue_updates":{"complex-migration":{"workforce_employee_id":"EMP-006","remaining_hours":30}},"expected_findings":["weak_task_fit"]},
+    {"name":"paired_fit","issue_updates":{"complex-migration":{"senior_pairing_employee_id":"EMP-001"}},"expected_findings":["protective_pairing"]},
+    {"name":"overloaded_candidate","issue_updates":{"schema-change":{"remaining_hours":38}},"expected_findings":["candidate_unsuitable"]},
+    {"name":"insufficient_data","issue_updates":{"primary-risk-task":{"evidence_complete":false}},"expected_findings":["insufficient_data"]},
+    {"name":"stale_proposal","issue_updates":{"primary-risk-task":{"due_offset_days":1}},"expected_findings":["stale_proposal"]},
+    {"name":"primary_demo","issue_updates":{"primary-risk-task":{"remaining_hours":30,"blocker_category":"Need clarification"}},"expected_findings":["employee_overload","weak_task_fit","blocked_work"]},
+    {"name":"backup_demo","issue_updates":{"complex-migration":{"remaining_hours":30,"blocker_category":"Technical blocker"}},"expected_findings":["weak_task_fit","blocked_work"]}
+  ],
+  "controlled_write_fixture":{"issue_external_id":"primary-risk-task","current_account_ref":"current_assignee","target_account_ref":"target_assignee"}
+}

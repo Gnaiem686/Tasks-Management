@@ -49,7 +49,7 @@ async def execute(args: argparse.Namespace) -> None:
     try:
         if args.command == "create":
             now = datetime.now(UTC)
-            raw_key, record = ApiKeyService(load_pepper()).generate(
+            raw_key, generated_record = ApiKeyService(load_pepper()).generate(
                 actor_id=args.actor_id,
                 display_label=args.label,
                 role=ApplicationRole(args.role),
@@ -62,14 +62,14 @@ async def execute(args: argparse.Namespace) -> None:
                 session.add(
                     ApiKeyPrincipal(
                         id=uuid.uuid4(),
-                        environment=record.environment,
-                        created_at=record.created_at,
-                        actor_id=record.actor_id,
-                        display_label=record.display_label,
-                        key_digest=record.key_digest,
-                        role=record.role.value,
-                        project_scopes=list(record.project_scopes),
-                        expires_at=record.expires_at,
+                        environment=generated_record.environment,
+                        created_at=generated_record.created_at,
+                        actor_id=generated_record.actor_id,
+                        display_label=generated_record.display_label,
+                        key_digest=generated_record.key_digest,
+                        role=generated_record.role.value,
+                        project_scopes=list(generated_record.project_scopes),
+                        expires_at=generated_record.expires_at,
                     )
                 )
             print("API key (shown once):")
@@ -77,11 +77,12 @@ async def execute(args: argparse.Namespace) -> None:
         elif args.command == "list":
             async with database.transaction() as session:
                 records = (await session.scalars(select(ApiKeyPrincipal))).all()
-                for record in records:
-                    revoked = record.revoked_at is not None
+                for principal in records:
+                    revoked = principal.revoked_at is not None
                     print(
-                        f"{record.id} actor={record.actor_id} role={record.role} "
-                        f"environment={record.environment} revoked={revoked}"
+                        f"{principal.id} actor={principal.actor_id} "
+                        f"role={principal.role} environment={principal.environment} "
+                        f"revoked={revoked}"
                     )
         else:
             async with database.transaction() as session:
