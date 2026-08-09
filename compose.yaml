@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16.4-alpine
+    image: postgres:16.4-alpine@sha256:5660c2cbfea50c7a9127d17dc4e48543eedd3d7a41a595a2dfa572471e37e64c
     environment:
       POSTGRES_DB: workforce
       POSTGRES_USER: workforce
@@ -14,6 +14,121 @@ services:
       retries: 20
     volumes:
       - workforce-postgres-data:/var/lib/postgresql/data
+
+  localstack:
+    image: localstack/localstack:3.7.2@sha256:811d4cd67e6cc833cd5849ddaac454abd90c0d0fc00d402f8f82ee47926c5e10
+    environment:
+      SERVICES: s3,sqs
+      DEFAULT_REGION: us-east-1
+    ports:
+      - "127.0.0.1:4566:4566"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1:4566/_localstack/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  workforce-risk-mcp:
+    build:
+      context: .
+      dockerfile: services/workforce-risk-mcp/Dockerfile
+    environment:
+      APP_ENVIRONMENT: dev
+      WORKFORCE_MCP_HOST: 0.0.0.0
+      WORKFORCE_MCP_PORT: "8001"
+      DATABASE_URL: postgresql+asyncpg://workforce:workforce-local-only@postgres:5432/workforce
+      INTERNAL_AUTH_SECRET: local-integration-secret-change-before-deploy
+      JIRA_MUTATION_ENABLED: "false"
+    ports:
+      - "127.0.0.1:8001:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    init: true
+    restart: unless-stopped
+    tmpfs: [/tmp]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8001), 2).close()"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  devops-mcp:
+    build:
+      context: .
+      dockerfile: services/devops-mcp/Dockerfile
+    environment:
+      APP_ENVIRONMENT: dev
+      DEVOPS_MCP_HOST: 0.0.0.0
+      DEVOPS_MCP_PORT: "8002"
+      DEVOPS_BACKEND_MODE: fixture
+    ports:
+      - "127.0.0.1:8002:8002"
+    read_only: true
+    init: true
+    restart: unless-stopped
+    tmpfs: [/tmp]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8002), 2).close()"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  notification-worker:
+    build:
+      context: .
+      dockerfile: services/notification-worker/Dockerfile
+    environment:
+      APP_ENVIRONMENT: dev
+      DATABASE_URL: postgresql+asyncpg://workforce:workforce-local-only@postgres:5432/workforce
+      AWS_ENDPOINT_URL: http://localstack:4566
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    read_only: true
+    init: true
+    restart: unless-stopped
+    tmpfs: [/tmp]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; os.kill(1, 0)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  agent-api:
+    build:
+      context: .
+      dockerfile: services/agent-api/Dockerfile
+    environment:
+      APP_ENVIRONMENT: dev
+      EVIDENCE_MODE: fixture
+      EVIDENCE_FIXTURE_DIR: tests/fixtures/scenarios
+      WORKFORCE_MCP_URL: http://workforce-risk-mcp:8001/mcp
+      DATABASE_URL: postgresql+asyncpg://workforce:workforce-local-only@postgres:5432/workforce
+      API_KEY_HMAC_PEPPER: local-only-pepper-with-at-least-thirty-two-bytes
+      INTERNAL_AUTH_SECRET: local-integration-secret-change-before-deploy
+      JIRA_PROJECT_KEY: WRD
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      workforce-risk-mcp:
+        condition: service_healthy
+      devops-mcp:
+        condition: service_healthy
+    read_only: true
+    init: true
+    restart: unless-stopped
+    tmpfs: [/tmp]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
 volumes:
   workforce-postgres-data:

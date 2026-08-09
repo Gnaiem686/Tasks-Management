@@ -85,6 +85,18 @@ async def liveness() -> dict[str, str]:
     return {"status": "live"}
 
 
+@app.get("/health/startup")
+async def startup() -> dict[str, str]:
+    return {"status": "started"}
+
+
+@app.get("/health/ready")
+async def readiness() -> dict[str, str]:
+    # Dependency-specific failures are handled at each workflow boundary. This
+    # endpoint means the API can safely accept and classify a request.
+    return {"status": "ready", "mode": "request-specific"}
+
+
 @app.get("/metrics", include_in_schema=False)
 async def metrics() -> PlainTextResponse:
     return PlainTextResponse(

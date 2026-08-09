@@ -20,3 +20,15 @@ async def test_api_exposes_bounded_prometheus_metrics() -> None:
     assert "workforce_http_requests_total" in metrics.text
     assert 'service="agent-api"' in metrics.text
     assert "corr-metric" not in metrics.text
+
+
+@pytest.mark.asyncio
+async def test_api_exposes_distinct_startup_and_readiness_contracts() -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        startup = await client.get("/health/startup")
+        readiness = await client.get("/health/ready")
+
+    assert startup.json() == {"status": "started"}
+    assert readiness.json() == {"status": "ready", "mode": "request-specific"}
