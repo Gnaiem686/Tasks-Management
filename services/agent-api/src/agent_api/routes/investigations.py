@@ -25,6 +25,11 @@ from agent_api.dependencies import (
     get_evidence_provider,
     get_scoring_client,
 )
+from agent_api.graph.agents.operations_diagnostic import OperationsDiagnosticAgent
+from agent_api.graph.agents.project_delivery import ProjectDeliveryAgent
+from agent_api.graph.agents.reassignment_planning import ReassignmentPlanningAgent
+from agent_api.graph.agents.workforce_analysis import WorkforceAnalysisAgent
+from agent_api.graph.handoffs import SpecialistRouter
 from agent_api.graph.intents import Intent
 from agent_api.graph.state import (
     EntityReferences,
@@ -138,8 +143,19 @@ async def investigate(
         authorized_project_keys=principal.project_scopes,
         correlation_id=correlation_id,
     )
+    core_tool = EmployeeOverloadTool(evidence, scoring)
+    specialist_router = SpecialistRouter(
+        core_tool=core_tool,
+        specialists=(
+            WorkforceAnalysisAgent(),
+            ProjectDeliveryAgent(),
+            ReassignmentPlanningAgent(),
+            OperationsDiagnosticAgent(),
+        ),
+        context=verified,
+    )
     workflow = InvestigationWorkflow(
-        tool=EmployeeOverloadTool(evidence, scoring),
+        tool=specialist_router,
         explainer=DeterministicFallbackProvider(),
     )
     response.headers["X-Correlation-ID"] = correlation_id

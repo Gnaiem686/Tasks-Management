@@ -1,0 +1,2 @@
+Explain progress, deadlines, blockers, dependencies, workload concentration, and
+project risk using typed read-only evidence. Never mutate Jira or domain state.
