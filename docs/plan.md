@@ -38,7 +38,7 @@
 - Never generically retry a Jira mutation. Ambiguous outcomes become `uncertain` and enter reconciliation.
 - Jira development mutations use only the configured synthetic dev project. Production Jira tests are read-only.
 - Scenario progression runs only from external workstation/GitHub Actions test
-  tooling against `WORKFORCE-SIM`. Do not create a simulation namespace,
+  tooling against the guarded synthetic `WRD` project. Do not create a simulation namespace,
   simulator container, pod, Job, CronJob, service, or LangGraph tool.
 - Amazon EKS is not used.
 - Dev and prod use isolated credentials, Jira scopes, databases, buckets,
@@ -128,11 +128,11 @@ These names remain consistent throughout implementation:
 
 # Phase 0 — Pre-implementation validations
 
-## Task 0.1: Close stakeholder decisions and choose the Jira development scope
+## Task 0.1: Close stakeholder decisions and record the Jira development scope
 
 **Classification:** Security/Hardening
 
-**Objective:** Record every open stakeholder decision and select either temporary project `WRD` or a newly created `WORKFORCE-DEV` as the single configured development scope.
+**Objective:** Record every open stakeholder decision and record the already selected `WRD` project as the single configured development scope.
 
 **Why this task is needed:** Project keys, access policies, smoke tests, cleanup guards, RDS topology, notification adapter, and report scope cannot be implemented safely while their approval gates remain ambiguous.
 
@@ -161,18 +161,18 @@ These names remain consistent throughout implementation:
 - [ ] Require repeatable Jira validation, custom-field checks, seeding,
   permission checks, and cleanup to be scripted or API-driven where Atlassian
   supports automation.
-- [ ] Record the selected development key as exactly `WRD` or `WORKFORCE-DEV`; do not permit both as mutation scopes.
+- [ ] Record the selected development key as exactly `WRD`; do not permit any second mutation scope.
 - [ ] Keep the selected key only in the Phase 0 decision record; do not create
   or modify environment configuration in this task.
 - [ ] Record `WORKFORCE-PROD` as read-only and forbidden to seed, clean, or mutate.
-- [ ] If `WORKFORCE-DEV` is selected, create it through an approved Jira administrative process and repeat the already-proven discovery, custom-field, account-resolution, assignee-update, and read-back checks.
+- [ ] If a verified Jira limitation later makes `WRD` unusable, require a reviewed scope change and repeat the already-proven discovery, custom-field, account-resolution, assignee-update, and read-back checks before a replacement project is allowed to mutate.
 - [ ] Obtain stakeholder signatures in the validation record.
 
 **Commands to run:**
 
 ```bash
 rg -n "Decision:|Approver:|Approved on:|Development Jira key:" docs/validations/phase-0-decisions.md
-rg -n "WRD|WORKFORCE-DEV|WORKFORCE-PROD" docs/validations/phase-0-decisions.md
+rg -n "WRD|WORKFORCE-PROD" docs/validations/phase-0-decisions.md
 ```
 
 **Expected output or observable result:** One approved development key is
@@ -1227,7 +1227,7 @@ scenarios before agent behavior is added.
   dev-administration scripts and inherits project/prod guards.
 - Prove the scenario workflow runs outside Kubernetes, has no Kubernetes/AWS
   production credentials, creates no simulator manifest/namespace/workload,
-  cannot be invoked by LangGraph, and can target only `WORKFORCE-SIM`.
+  cannot be invoked by LangGraph, and can target only `WRD`.
 - Advance every versioned scenario step idempotently, trigger an authenticated
   dev Agent scan, and compare observed deterministic results with the fixture's
   expected findings/scores without directly sending expectations to the agent.
