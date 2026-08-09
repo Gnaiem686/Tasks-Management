@@ -87,3 +87,43 @@ variable "node_generation" {
   type        = number
   default     = 1
 }
+
+variable "dev_database_name" {
+  type    = string
+  default = "workforce_dev"
+}
+
+variable "prod_database_name" {
+  type    = string
+  default = "workforce_prod"
+}
+
+variable "postgres_engine_version" {
+  description = "Reviewed exact RDS PostgreSQL engine version."
+  type        = string
+}
+
+variable "rds_instance_class" {
+  type    = string
+  default = "db.t4g.micro"
+}
+
+variable "bedrock_model_id" {
+  description = "Phase 0 validated Bedrock foundation model ID."
+  type        = string
+}
+
+variable "ses_identity_arn" {
+  description = "Verified SES domain or email identity ARN; verification is an external gate."
+  type        = string
+}
+
+variable "cluster_oidc_provider_arn" {
+  description = "IAM OIDC provider ARN for the kubeadm service-account issuer."
+  type        = string
+}
+
+variable "cluster_oidc_issuer_hostpath" {
+  description = "OIDC issuer without https://, used in trust-policy condition keys."
+  type        = string
+}
