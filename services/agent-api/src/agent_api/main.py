@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
+from agent_api.observability import ApiMetricsMiddleware, api_metrics
 from agent_api.routes.alerts import router as alert_router
 from agent_api.routes.audit import router as audit_router
 from agent_api.routes.investigations import router as investigation_router
@@ -19,6 +21,8 @@ from agent_api.routes.ui import router as ui_router
 from agent_api.security.limits import RequestBoundaryMiddleware
 
 app = FastAPI(title="Workforce Risk Agent API", version="0.1.0")
+app.state.environment = os.getenv("APP_ENVIRONMENT", "dev")
+app.add_middleware(ApiMetricsMiddleware)
 app.add_middleware(RequestBoundaryMiddleware)
 app.include_router(risk_router)
 app.include_router(profile_router)
@@ -79,3 +83,10 @@ async def validation_error(
 @app.get("/health/live")
 async def liveness() -> dict[str, str]:
     return {"status": "live"}
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics() -> PlainTextResponse:
+    return PlainTextResponse(
+        api_metrics.render(), media_type="text/plain; version=0.0.4; charset=utf-8"
+    )

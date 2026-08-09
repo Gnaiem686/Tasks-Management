@@ -1,0 +1,36 @@
+receivers:
+  otlp:
+    protocols:
+      grpc: {}
+      http: {}
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+  batch: {}
+  tail_sampling:
+    decision_wait: 10s
+    policies:
+      - name: failed-or-uncertain-workflows
+        type: string_attribute
+        string_attribute:
+          key: workflow.outcome
+          values: [failed, uncertain]
+      - name: controlled-baseline
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 10
+exporters:
+  otlp/backend:
+    endpoint: ${env:OTEL_BACKEND_ENDPOINT}
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, tail_sampling, batch]
+      exporters: [otlp/backend]
+workforce_sampling_policy:
+  dev_percentage: 100
+  prod_percentage: 10
+  always_retain_outcomes: [failed, uncertain]
+  note: Correlation IDs are trace attributes and must never be metric labels.

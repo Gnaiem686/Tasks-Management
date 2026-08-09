@@ -1,0 +1,116 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: workforce-platform-alerts
+  namespace: monitoring
+spec:
+  groups:
+    - name: workforce-workflow-health
+      rules:
+        - alert: WorkforceScheduledScanMissed
+          expr: time() - workforce_scan_last_completed_timestamp_seconds > 93600
+          for: 10m
+          labels: &workflow_labels
+            severity: warning
+            owner: workforce-platform
+            runbook_url: https://runbooks.invalid/workforce/missed-scan
+            environment: '{{ $labels.environment }}'
+          annotations:
+            summary: Scheduled risk scan is no longer fresh.
+        - alert: WorkforceNotificationQueueBacklog
+          expr: workforce_notification_queue_delay_seconds > 300
+          for: 10m
+          labels:
+            <<: *workflow_labels
+            runbook_url: https://runbooks.invalid/workforce/queue-backlog
+          annotations:
+            summary: Manager notification delivery is delayed.
+        - alert: WorkforceUncertainJiraExecution
+          expr: increase(workforce_proposal_verifications_total{outcome="uncertain"}[10m]) > 0
+          for: 0m
+          labels:
+            <<: *workflow_labels
+            severity: critical
+            runbook_url: https://runbooks.invalid/workforce/uncertain-execution
+          annotations:
+            summary: A Jira reassignment requires reconciliation.
+        - alert: WorkforceJiraCircuitOpen
+          expr: workforce_dependency_ready{dependency="jira"} == 0
+          for: 5m
+          labels:
+            <<: *workflow_labels
+            severity: critical
+            runbook_url: https://runbooks.invalid/workforce/jira-circuit
+          annotations:
+            summary: Jira integration circuit is open.
+        - alert: WorkforceApiServerFailureRate
+          expr: sum(rate(workforce_http_requests_total{outcome="server_error"}[5m])) > 0.05
+          for: 10m
+          labels:
+            <<: *workflow_labels
+            runbook_url: https://runbooks.invalid/workforce/api-errors
+          annotations:
+            summary: Server-side API failures exceed the objective.
+        - alert: WorkforceBedrockFallbackSpike
+          expr: sum(rate(workforce_bedrock_requests_total{outcome="fallback"}[10m])) > 0.1
+          for: 15m
+          labels:
+            <<: *workflow_labels
+            runbook_url: https://runbooks.invalid/workforce/bedrock-fallback
+          annotations:
+            summary: Bedrock fallback use is elevated; deterministic analysis remains available.
+    - name: workforce-infrastructure-health
+      rules:
+        - alert: WorkforceNodeNotReady
+          expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+          for: 10m
+          labels: &infrastructure_labels
+            severity: critical
+            owner: workforce-platform
+            runbook_url: https://runbooks.invalid/workforce/cluster-health
+            environment: '{{ $labels.environment }}'
+          annotations:
+            summary: A Kubernetes node is not ready.
+        - alert: WorkforceUnavailableReplicas
+          expr: kube_deployment_status_replicas_unavailable > 0
+          for: 10m
+          labels:
+            <<: *infrastructure_labels
+            severity: warning
+          annotations:
+            summary: A workforce deployment has unavailable replicas.
+        - alert: WorkforceCronJobFailed
+          expr: kube_job_status_failed{job_name=~"workforce-risk-scan-.*"} > 0
+          for: 5m
+          labels:
+            <<: *infrastructure_labels
+            severity: warning
+            runbook_url: https://runbooks.invalid/workforce/missed-scan
+          annotations:
+            summary: A scheduled scan job failed.
+        - alert: WorkforceIngressFailureRate
+          expr: sum(rate(nginx_ingress_controller_requests{status=~"5.."}[5m])) > 0.05
+          for: 10m
+          labels:
+            <<: *infrastructure_labels
+            severity: warning
+            runbook_url: https://runbooks.invalid/workforce/cluster-health
+          annotations:
+            summary: Ingress server-side failure rate is elevated.
+        - alert: WorkforceRdsConnectivityFailure
+          expr: workforce_dependency_ready{dependency="rds"} == 0
+          for: 5m
+          labels:
+            <<: *infrastructure_labels
+            runbook_url: https://runbooks.invalid/workforce/database-health
+          annotations:
+            summary: PostgreSQL connectivity is unavailable.
+        - alert: WorkforceNotificationDlqNotEmpty
+          expr: workforce_notification_queue_visible_messages{dependency="sqs_dlq"} > 0
+          for: 5m
+          labels:
+            <<: *infrastructure_labels
+            severity: warning
+            runbook_url: https://runbooks.invalid/workforce/queue-backlog
+          annotations:
+            summary: The notification dead-letter queue contains messages.

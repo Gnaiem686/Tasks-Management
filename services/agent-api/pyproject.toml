@@ -13,6 +13,7 @@ dependencies = [
   "workforce-jira-mcp-client",
   "workforce-risk-domain",
   "workforce-persistence",
+  "workforce-observability",
 ]
 
 [build-system]
@@ -27,3 +28,4 @@ workforce-contracts = { workspace = true }
 workforce-jira-mcp-client = { workspace = true }
 workforce-risk-domain = { workspace = true }
 workforce-persistence = { workspace = true }
+workforce-observability = { workspace = true }

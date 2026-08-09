@@ -1,0 +1,10 @@
+{
+  "title": "Workforce Risk — Executive Overview",
+  "uid": "workforce-executive",
+  "tags": ["workforce", "business"],
+  "panels": [
+    {"id": 1, "title": "Active risk levels", "type": "stat", "targets": [{"expr": "sum by (risk_level) (workforce_risk_snapshots)"}]},
+    {"id": 2, "title": "Scheduled scan freshness", "type": "timeseries", "targets": [{"expr": "time() - workforce_scan_last_completed_timestamp_seconds"}]}
+  ],
+  "schemaVersion": 39
+}
