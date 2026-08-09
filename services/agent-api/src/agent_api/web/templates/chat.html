@@ -128,6 +128,108 @@
                     <p><strong>Support reference:</strong> <span id="chat-correlation"></span></p>
                 </article>
             </section>
+            <section class="panel" aria-labelledby="proposal-title">
+                <h2 id="proposal-title">Structured reassignment proposal</h2>
+                <form id="proposal-load-form">
+                    <div class="grow">
+                        <label for="proposal-id">Proposal ID</label>
+                        <input id="proposal-id" maxlength="128" required>
+                    </div>
+                    <button type="submit">Load proposal</button>
+                </form>
+                <p id="proposal-error" class="message error" role="alert" hidden></p>
+                <article id="proposal-review" hidden>
+                    <p class="message warning" role="alert">
+                        Review every field. Approval does not execute Jira in this phase.
+                        Stale or changed evidence closes the proposal.
+                    </p>
+                    <dl class="summary-grid">
+                        <div>
+                            <dt>Current assignee</dt>
+                            <dd id="proposal-current-assignee">
+                                —
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>Proposed assignee</dt>
+                            <dd id="proposal-new-assignee">
+                                —
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>Current employee risk</dt>
+                            <dd id="current-employee-risk">
+                                —
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>Predicted employee risk</dt>
+                            <dd id="predicted-employee-risk">
+                                —
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>Current project risk</dt>
+                            <dd id="current-project-risk">
+                                —
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>Predicted project risk</dt>
+                            <dd id="predicted-project-risk">
+                                —
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>Skill-fit comparison</dt>
+                            <dd id="skill-fit-comparison">
+                                —
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>Workload impact</dt>
+                            <dd id="workload-impact">
+                                —
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>Dependency impact</dt>
+                            <dd id="dependency-impact">
+                                —
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>Confidence</dt>
+                            <dd id="proposal-confidence">
+                                —
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>Expires</dt>
+                            <dd id="proposal-expiry">
+                                —
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>Evidence fingerprint</dt>
+                            <dd id="proposal-fingerprint" class="breakable">
+                                —
+                            </dd>
+                        </div>
+                    </dl>
+                    <div class="confirmation">
+                        <input id="proposal-confirm" type="checkbox">
+                        <label for="proposal-confirm" id="proposal-confirm-label">I confirm this exact proposal ID and assignee change.</label>
+                    </div>
+                    <div class="action-row">
+                        <button id="approve-proposal" type="button">Approve exact proposal</button>
+                        <button id="reject-proposal" type="button" class="danger">Reject proposal</button>
+                    </div>
+                    <p id="operation-status" role="status" aria-live="polite">
+                        Awaiting a structured manager decision. Jira has not been changed.
+                    </p>
+                </article>
+            </section>
         </main>
     </body>
 </html>

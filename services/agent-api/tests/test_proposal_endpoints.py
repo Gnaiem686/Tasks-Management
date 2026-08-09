@@ -28,6 +28,16 @@ class Client:
         self.request, self.principal = request, principal
         return {"proposal_id": "proposal-1", "state": "pending", "version": 1}
 
+    async def get_proposal(
+        self,
+        *,
+        request: dict[str, Any],
+        principal: AuthenticatedPrincipal,
+        correlation_id: str,
+    ) -> dict[str, Any]:
+        self.request, self.principal = request, principal
+        return {"proposal_id": request["proposal_id"], "state": "pending", "version": 1}
+
     async def decide_proposal(
         self,
         *,

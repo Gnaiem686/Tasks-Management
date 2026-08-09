@@ -31,6 +31,10 @@ class StoredProposal:
     proposed_assignee_id: str
     evidence_fingerprint: str
     expires_at: datetime
+    project_key: str
+    confidence: str
+    scoring_versions: tuple[str, ...]
+    simulation_payload: dict[str, Any]
 
 
 class ProposalRepository:
@@ -48,7 +52,24 @@ class ProposalRepository:
             proposed_assignee_id=record.proposed_assignee,
             evidence_fingerprint=record.evidence_fingerprint,
             expires_at=record.expires_at,
+            project_key=record.project_key,
+            confidence=record.confidence,
+            scoring_versions=tuple(record.scoring_versions),
+            simulation_payload=record.simulation_payload,
         )
+
+    async def get_authorized(
+        self, proposal_id: str, *, actor: ProposalActor
+    ) -> StoredProposal | None:
+        record = await self._session.scalar(
+            select(ReassignmentProposal).where(
+                ReassignmentProposal.id == uuid.UUID(proposal_id),
+                ReassignmentProposal.environment == actor.environment,
+            )
+        )
+        if record is None or record.project_key not in actor.project_scopes:
+            return None
+        return self._view(record)
 
     async def create(
         self, command: ProposalCreateCommand, actor: ProposalActor

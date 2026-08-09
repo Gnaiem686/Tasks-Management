@@ -22,7 +22,10 @@ async def test_contextual_chat_is_accessible_and_has_restrictive_csp() -> None:
     assert '<label for="manager-question">' in response.text
     assert 'aria-live="polite"' in response.text
     assert 'id="chat-citations"' in response.text
-    assert "Approve" not in response.text
+    chat_section = response.text.split('aria-labelledby="chat-title"', 1)[1].split(
+        'aria-labelledby="proposal-title"', 1
+    )[0]
+    assert "Approve" not in chat_section
 
 
 @pytest.mark.ui
@@ -37,4 +40,3 @@ def test_client_sends_only_bounded_context_and_renders_safe_text() -> None:
     assert "fullEvidence" not in script
     assert "capability_guidance" in script
     assert "correlation_id" in script
-

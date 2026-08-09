@@ -17,6 +17,13 @@ router = APIRouter(prefix="/api/v1")
 
 
 class ProposalClient(Protocol):
+    async def get_proposal(
+        self,
+        *,
+        request: dict[str, Any],
+        principal: AuthenticatedPrincipal,
+        correlation_id: str,
+    ) -> dict[str, Any]: ...
     async def create_proposal(
         self,
         *,
@@ -62,6 +69,25 @@ def get_proposal_client() -> ProposalClient:
         url=os.getenv("WORKFORCE_MCP_URL", "http://127.0.0.1:8001/mcp"),
         secret=secret.encode(),
     )
+
+
+@router.get("/proposals/{proposal_id}")
+async def get_proposal_endpoint(
+    proposal_id: str,
+    response: Response,
+    project_key: Annotated[str, Query(min_length=1)],
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_proposal_manager)],
+    client: Annotated[ProposalClient, Depends(get_proposal_client)],
+    x_correlation_id: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    correlation_id = x_correlation_id or f"corr-{uuid4()}"
+    result = await client.get_proposal(
+        request={"project_key": project_key, "proposal_id": proposal_id},
+        principal=principal,
+        correlation_id=correlation_id,
+    )
+    response.headers["X-Correlation-ID"] = correlation_id
+    return result
 
 
 @router.post("/proposals", status_code=201)

@@ -31,9 +31,11 @@ from workforce_risk_mcp.tools.proposals import (
     FreshnessProvider,
     ProposalCreateRequest,
     ProposalDecisionRequest,
+    ProposalGetRequest,
     authorize_proposal,
     create_proposal,
     decide_proposal,
+    get_proposal,
 )
 from workforce_risk_mcp.tools.score_overload import (
     ScoreOverloadRequest,
@@ -332,6 +334,36 @@ async def decide_reassignment_proposal_tool(
                 freshness=get_proposal_freshness_provider(),
             )
             return asdict(result)
+    finally:
+        await database.close()
+
+
+@mcp.tool(name="get_reassignment_proposal")
+async def get_reassignment_proposal_tool(
+    request: dict[str, Any], ctx: Context[Any, Any, Any]
+) -> dict[str, Any]:
+    validated = ProposalGetRequest.model_validate(request)
+    secret = os.getenv("INTERNAL_AUTH_SECRET")
+    database_url = os.getenv("DATABASE_URL")
+    if not secret or not database_url:
+        raise RuntimeError("protected proposal service is not configured")
+    verified = authorize_proposal(
+        transport_context=_transport_context(ctx),
+        secret=secret.encode(),
+        environment=cast(Literal["dev", "prod", "test"], ENVIRONMENT),
+        project_key=validated.project_key,
+        now=datetime.now(UTC),
+    )
+    database = Database(database_url)
+    try:
+        async with database.transaction() as session:
+            return asdict(
+                await get_proposal(
+                    validated,
+                    context=verified,
+                    repository=ProposalRepository(session),
+                )
+            )
     finally:
         await database.close()
 

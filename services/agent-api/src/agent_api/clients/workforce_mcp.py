@@ -91,6 +91,20 @@ class StreamableHttpProfileClient:
 
 
 class StreamableHttpProposalClient(StreamableHttpProfileClient):
+    async def get_proposal(
+        self,
+        *,
+        request: dict[str, Any],
+        principal: AuthenticatedPrincipal,
+        correlation_id: str,
+    ) -> dict[str, Any]:
+        return await self._call(
+            tool_name="get_reassignment_proposal",
+            arguments={"request": request},
+            principal=principal,
+            correlation_id=correlation_id,
+        )
+
     async def create_proposal(
         self,
         *,

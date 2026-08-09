@@ -11,6 +11,15 @@ const chatLoading = document.querySelector("#chat-loading");
 const chatError = document.querySelector("#chat-error");
 const chatAnswer = document.querySelector("#chat-answer");
 const tabKeyName = "workforceManagerApiKey";
+const proposalLoadForm = document.querySelector("#proposal-load-form");
+const proposalReview = document.querySelector("#proposal-review");
+const proposalError = document.querySelector("#proposal-error");
+const proposalConfirm = document.querySelector("#proposal-confirm");
+const approveProposal = document.querySelector("#approve-proposal");
+const rejectProposal = document.querySelector("#reject-proposal");
+let loadedProposal = null;
+let proposalDecisionKey = null;
+let approvalInFlight = false;
 
 const labels = {
   low: "✓ Low risk",
@@ -95,6 +104,119 @@ function renderAnswer(payload) {
   setText("#chat-correlation", payload.correlation_id || "unavailable");
   chatAnswer.hidden = false;
 }
+
+function proposalValue(payload, key, fallback = "Not available") {
+  const value = payload.simulation_payload?.[key];
+  return value === undefined || value === null ? fallback : String(value);
+}
+
+function renderProposal(payload) {
+  loadedProposal = payload;
+  proposalDecisionKey = crypto.randomUUID();
+  proposalConfirm.checked = false;
+  setText("#proposal-current-assignee", payload.current_assignee_id);
+  setText("#proposal-new-assignee", payload.proposed_assignee_id);
+  setText("#current-employee-risk", proposalValue(payload, "current_employee_risk"));
+  setText("#predicted-employee-risk", proposalValue(payload, "predicted_employee_risk"));
+  setText("#current-project-risk", proposalValue(payload, "current_project_risk"));
+  setText("#predicted-project-risk", proposalValue(payload, "predicted_project_risk"));
+  setText("#skill-fit-comparison", proposalValue(payload, "skill_fit_comparison"));
+  setText("#workload-impact", proposalValue(payload, "workload_impact"));
+  setText("#dependency-impact", proposalValue(payload, "dependency_impact"));
+  setText("#proposal-confidence", payload.confidence);
+  setText("#proposal-expiry", new Date(payload.expires_at).toLocaleString());
+  setText("#proposal-fingerprint", payload.evidence_fingerprint);
+  setText(
+    "#proposal-confirm-label",
+    `I confirm proposal ${payload.proposal_id}: ${payload.current_assignee_id} → ${payload.proposed_assignee_id}.`,
+  );
+  setText("#operation-status", `${payload.state}. Jira has not been changed.`);
+  proposalReview.hidden = false;
+}
+
+async function proposalRequest(path, options = {}) {
+  const apiKey = sessionStorage.getItem(tabKeyName);
+  if (!apiKey) {
+    throw new Error("Enter the environment API key before reviewing a proposal.");
+  }
+  const response = await fetch(`${path}?project_key=WRD`, {
+    ...options,
+    headers: {
+      Accept: "application/json",
+      ...(options.body ? {"Content-Type": "application/json"} : {}),
+      Authorization: `Bearer ${apiKey}`,
+    },
+  });
+  const payload = await response.json();
+  if (!response.ok) {
+    const state = response.status === 409 ? "stale or conflicting" : "unavailable";
+    throw new Error(`Proposal is ${state}. Jira has not been changed.`);
+  }
+  return payload;
+}
+
+async function pollProposal(proposalId, remaining = 10) {
+  if (remaining <= 0) return;
+  const payload = await proposalRequest(`/api/v1/proposals/${encodeURIComponent(proposalId)}`);
+  renderProposal(payload);
+  if (payload.state === "executing") {
+    setText("#operation-status", "executing. Jira has not been changed in this phase.");
+    setTimeout(() => pollProposal(proposalId, remaining - 1), 1000);
+  }
+}
+
+proposalLoadForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  proposalError.hidden = true;
+  try {
+    const proposalId = document.querySelector("#proposal-id").value;
+    renderProposal(await proposalRequest(`/api/v1/proposals/${encodeURIComponent(proposalId)}`));
+  } catch (error) {
+    proposalError.textContent = error instanceof Error ? error.message : "Proposal unavailable.";
+    proposalError.hidden = false;
+  }
+});
+
+async function decideLoadedProposal(decision) {
+  if (approvalInFlight || !loadedProposal) return;
+  if (!proposalConfirm.checked) {
+    proposalError.textContent = "Confirm the exact proposal before deciding.";
+    proposalError.hidden = false;
+    proposalConfirm.focus();
+    return;
+  }
+  approvalInFlight = true;
+  approveProposal.disabled = true;
+  rejectProposal.disabled = true;
+  proposalError.hidden = true;
+  try {
+    const payload = await proposalRequest(
+      `/api/v1/proposals/${encodeURIComponent(loadedProposal.proposal_id)}/${decision}`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          expected_version: loadedProposal.version,
+          idempotency_key: proposalDecisionKey,
+        }),
+      },
+    );
+    renderProposal(payload);
+    if (payload.state === "executing") {
+      setText("#operation-status", "executing. Jira has not been changed in this phase.");
+      setTimeout(() => pollProposal(payload.proposal_id), 1000);
+    }
+  } catch (error) {
+    proposalError.textContent = error instanceof Error ? error.message : "Decision failed.";
+    proposalError.hidden = false;
+  } finally {
+    approvalInFlight = false;
+    approveProposal.disabled = false;
+    rejectProposal.disabled = false;
+  }
+}
+
+approveProposal.addEventListener("click", () => decideLoadedProposal("approve"));
+rejectProposal.addEventListener("click", () => decideLoadedProposal("reject"));
 
 accessForm.addEventListener("submit", (event) => {
   event.preventDefault();

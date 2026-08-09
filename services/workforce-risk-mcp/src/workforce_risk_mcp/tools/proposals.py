@@ -35,6 +35,12 @@ class ProposalDecisionRequest(BaseModel):
     decided_at: AwareDatetime
 
 
+class ProposalGetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    project_key: str
+    proposal_id: str
+
+
 class FreshnessProvider(Protocol):
     async def fingerprint_for_proposal(self, proposal_id: str) -> str: ...
 
@@ -102,3 +108,17 @@ async def decide_proposal(
         ),
         actor_from_context(context),
     )
+
+
+async def get_proposal(
+    request: ProposalGetRequest,
+    *,
+    context: VerifiedInternalContext,
+    repository: ProposalRepository,
+) -> StoredProposal:
+    result = await repository.get_authorized(
+        request.proposal_id, actor=actor_from_context(context)
+    )
+    if result is None:
+        raise ValueError("proposal not found")
+    return result
