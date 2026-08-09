@@ -32,6 +32,17 @@ class RecordingProfileClient:
             "version": expected_version + 1,
         }
 
+    async def create_profile(
+        self,
+        *,
+        profile: dict[str, Any],
+        project_key: str,
+        principal: AuthenticatedPrincipal,
+        correlation_id: str,
+    ) -> dict[str, Any]:
+        self.calls.append(locals())
+        return {**profile, "version": 1}
+
 
 async def administrator() -> AuthenticatedPrincipal:
     return AuthenticatedPrincipal(
@@ -96,4 +107,40 @@ async def test_profile_body_cannot_forge_identity_and_etag_is_required() -> None
         )
 
     assert missing.status_code == 428
+    assert forged.status_code == 422
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_admin_creates_profile_without_body_identity_or_environment() -> None:
+    client = RecordingProfileClient()
+    app.dependency_overrides[get_administrator] = administrator
+    app.dependency_overrides[get_profile_client] = profile_client_dependency(client)
+    payload = {
+        "employee_id": "EMP-003",
+        "role": "Backend Engineer",
+        "seniority": "mid",
+        "documented_skills": [{"name": "Python", "proficiency": 4}],
+        "weekly_capacity_hours": 40,
+        "project_allocations": [{"project_key": "WRD", "fraction": 1}],
+        "mentoring_available": True,
+        "capacity_overrides": [],
+        "jira_account_id": None,
+    }
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as api:
+        response = await api.post(
+            "/api/v1/profiles?project_key=WRD",
+            headers={"X-Correlation-ID": "corr-create-profile"},
+            json=payload,
+        )
+        forged = await api.post(
+            "/api/v1/profiles?project_key=WRD",
+            json={**payload, "environment": "prod", "actor_id": "forged"},
+        )
+
+    assert response.status_code == 201
+    assert response.headers["etag"] == '"1"'
+    assert client.calls[0]["principal"].actor_id == "admin-001"
+    assert "environment" not in client.calls[0]["profile"]
     assert forged.status_code == 422

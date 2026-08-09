@@ -18,6 +18,21 @@ class StreamableHttpProfileClient:
         self._url = url
         self._signer = InternalContextSigner(secret, lifetime=timedelta(seconds=60))
 
+    async def create_profile(
+        self,
+        *,
+        profile: dict[str, Any],
+        project_key: str,
+        principal: AuthenticatedPrincipal,
+        correlation_id: str,
+    ) -> dict[str, Any]:
+        return await self._call(
+            tool_name="create_profile",
+            arguments={"request": {"project_key": project_key, **profile}},
+            principal=principal,
+            correlation_id=correlation_id,
+        )
+
     async def update_capacity(
         self,
         *,
@@ -25,6 +40,28 @@ class StreamableHttpProfileClient:
         project_key: str,
         expected_version: int,
         weekly_capacity_hours: float,
+        principal: AuthenticatedPrincipal,
+        correlation_id: str,
+    ) -> dict[str, Any]:
+        return await self._call(
+            tool_name="update_profile_capacity",
+            arguments={
+                "request": {
+                    "employee_id": employee_id,
+                    "project_key": project_key,
+                    "expected_version": expected_version,
+                    "weekly_capacity_hours": weekly_capacity_hours,
+                }
+            },
+            principal=principal,
+            correlation_id=correlation_id,
+        )
+
+    async def _call(
+        self,
+        *,
+        tool_name: str,
+        arguments: dict[str, Any],
         principal: AuthenticatedPrincipal,
         correlation_id: str,
     ) -> dict[str, Any]:
@@ -39,17 +76,7 @@ class StreamableHttpProfileClient:
             ClientSession(streams[0], streams[1]) as session,
         ):
             await session.initialize()
-            response = await session.call_tool(
-                "update_profile_capacity",
-                arguments={
-                    "request": {
-                        "employee_id": employee_id,
-                        "project_key": project_key,
-                        "expected_version": expected_version,
-                        "weekly_capacity_hours": weekly_capacity_hours,
-                    }
-                },
-            )
+            response = await session.call_tool(tool_name, arguments=arguments)
         if response.isError:
             raise ValueError("Workforce MCP profile update failed")
         texts = [

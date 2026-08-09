@@ -10,6 +10,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from workforce_persistence.database import Database
 from workforce_persistence.models import ApiKeyPrincipal
+from workforce_risk.profiles import (
+    CapacityOverride,
+    DocumentedSkill,
+    ProjectAllocation,
+    Seniority,
+)
 
 from agent_api.auth.api_keys import (
     ApiKeyAuthenticationError,
@@ -24,6 +30,15 @@ router = APIRouter(prefix="/api/v1")
 
 
 class ProfileAdministrationClient(Protocol):
+    async def create_profile(
+        self,
+        *,
+        profile: dict[str, Any],
+        project_key: str,
+        principal: AuthenticatedPrincipal,
+        correlation_id: str,
+    ) -> dict[str, Any]: ...
+
     async def update_capacity(
         self,
         *,
@@ -39,6 +54,19 @@ class ProfileAdministrationClient(Protocol):
 class CapacityChange(BaseModel):
     model_config = ConfigDict(extra="forbid")
     weekly_capacity_hours: float = Field(gt=0, le=168)
+
+
+class ProfileCreatePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    employee_id: str = Field(pattern=r"^EMP-00[1-7]$")
+    role: str = Field(min_length=1, max_length=128)
+    seniority: Seniority
+    documented_skills: tuple[DocumentedSkill, ...]
+    weekly_capacity_hours: float = Field(gt=0, le=168)
+    project_allocations: tuple[ProjectAllocation, ...]
+    mentoring_available: bool
+    capacity_overrides: tuple[CapacityOverride, ...] = ()
+    jira_account_id: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 async def get_administrator(
@@ -92,6 +120,27 @@ def get_profile_client() -> ProfileAdministrationClient:
         url=os.getenv("WORKFORCE_MCP_URL", "http://127.0.0.1:8001/mcp"),
         secret=secret.encode(),
     )
+
+
+@router.post("/profiles", status_code=201)
+async def create_profile(
+    profile: ProfileCreatePayload,
+    response: Response,
+    project_key: Annotated[str, Query(min_length=1)],
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_administrator)],
+    client: Annotated[ProfileAdministrationClient, Depends(get_profile_client)],
+    x_correlation_id: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    correlation_id = x_correlation_id or f"corr-{uuid4()}"
+    result = await client.create_profile(
+        profile=profile.model_dump(mode="json"),
+        project_key=project_key,
+        principal=principal,
+        correlation_id=correlation_id,
+    )
+    response.headers["ETag"] = f'"{result["version"]}"'
+    response.headers["X-Correlation-ID"] = correlation_id
+    return result
 
 
 @router.patch("/profiles/{employee_id}/capacity")

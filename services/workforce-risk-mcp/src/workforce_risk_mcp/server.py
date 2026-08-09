@@ -11,6 +11,7 @@ from workforce_persistence.repositories import ProfileRepository
 
 from workforce_risk_mcp.tools.profiles import (
     ProfileCapacityUpdate,
+    ProfileCreateRequest,
     authorize_profile_change,
 )
 from workforce_risk_mcp.tools.score_overload import (
@@ -114,6 +115,75 @@ async def update_profile_capacity_tool(
                 "employee_id": updated.employee_id,
                 "weekly_capacity_hours": updated.weekly_capacity_hours,
                 "version": updated.version,
+            }
+    finally:
+        await database.close()
+
+
+@mcp.tool(name="create_profile")
+async def create_profile_tool(
+    request: dict[str, Any], ctx: Context[Any, Any, Any]
+) -> dict[str, Any]:
+    """Create an authoritative profile after transport authorization."""
+    validated = ProfileCreateRequest.model_validate(request)
+    http_request = ctx.request_context.request
+    transport_context = None
+    if http_request is not None and hasattr(http_request, "headers"):
+        transport_context = http_request.headers.get("X-Workforce-Authorization")
+    secret = os.getenv("INTERNAL_AUTH_SECRET")
+    database_url = os.getenv("DATABASE_URL")
+    if not secret or not database_url:
+        raise RuntimeError("protected profile service is not configured")
+    verified = authorize_profile_change(
+        validated,
+        transport_context=transport_context,
+        secret=secret.encode(),
+        environment=cast(Literal["dev", "prod", "test"], ENVIRONMENT),
+        now=datetime.now(UTC),
+    )
+    database = Database(database_url)
+    try:
+        async with database.transaction() as session:
+            created = await ProfileRepository(session).create(
+                environment=ENVIRONMENT,
+                employee_id=validated.employee_id,
+                role=validated.role,
+                seniority=validated.seniority.value,
+                weekly_capacity_hours=validated.weekly_capacity_hours,
+                mentoring_available=validated.mentoring_available,
+                jira_account_id=validated.jira_account_id,
+                skills=tuple(
+                    (skill.name, int(skill.proficiency))
+                    for skill in validated.documented_skills
+                ),
+                allocations=tuple(
+                    (allocation.project_key, allocation.fraction)
+                    for allocation in validated.project_allocations
+                ),
+                capacity_overrides=tuple(
+                    (
+                        override.starts_at,
+                        override.ends_at,
+                        override.capacity_hours,
+                        override.reason,
+                    )
+                    for override in validated.capacity_overrides
+                ),
+                actor_id=verified.actor_id,
+                correlation_id=verified.correlation_id,
+                created_at=datetime.now(UTC),
+            )
+            return {
+                "schema_version": "1.0",
+                "environment": created.environment,
+                "correlation_id": verified.correlation_id,
+                "employee_id": created.employee_id,
+                "role": created.role,
+                "seniority": created.seniority,
+                "weekly_capacity_hours": created.weekly_capacity_hours,
+                "mentoring_available": created.mentoring_available,
+                "jira_account_id": created.jira_account_id,
+                "version": created.version,
             }
     finally:
         await database.close()
