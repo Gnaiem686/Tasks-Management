@@ -30,4 +30,3 @@ def test_warning_and_confirmation_are_keyboard_and_non_color_accessible() -> Non
     assert 'for="proposal-confirm"' in template
     assert 'role="alert"' in template
     assert "Approval does not execute Jira" in template
-

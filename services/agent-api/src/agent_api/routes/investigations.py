@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal, cast
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from workforce_persistence.database import Database
@@ -42,6 +43,23 @@ from agent_api.llm.fallback import DeterministicFallbackProvider
 router = APIRouter(prefix="/api/v1")
 
 
+_AUTH_CACHE: dict[str, tuple[datetime, AuthenticatedPrincipal]] = {}
+
+
+def _cache_key(authorization: str | None) -> str | None:
+    if not authorization:
+        return None
+    return hashlib.sha256(authorization.encode()).hexdigest()
+
+
+def _eligible_cached_read(request: Request) -> bool:
+    path = request.url.path
+    return (
+        request.method == "GET"
+        and any(part in path for part in ("/alerts", "/reports", "/overload-risk"))
+    ) or (request.method == "POST" and path.endswith("/investigations"))
+
+
 class InvestigationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     question: str = Field(min_length=1, max_length=1_000)
@@ -75,6 +93,7 @@ class EmployeeOverloadTool:
 
 
 async def get_investigator(
+    request: Request,
     project_key: Annotated[str, Query(min_length=1)],
     authorization: Annotated[str | None, Header()] = None,
 ) -> AuthenticatedPrincipal:
@@ -86,6 +105,7 @@ async def get_investigator(
     if not database_url or not pepper:
         raise HTTPException(status_code=503, detail="authentication unavailable")
     database = Database(database_url)
+    key = _cache_key(authorization)
     try:
         async with database.transaction() as session:
             rows = (await session.scalars(select(ApiKeyPrincipal))).all()
@@ -103,7 +123,7 @@ async def get_investigator(
             )
             for row in rows
         )
-        return ApiKeyService(pepper.encode()).authenticate(
+        principal = ApiKeyService(pepper.encode()).authenticate(
             authorization,
             records=records,
             environment=environment,
@@ -115,9 +135,26 @@ async def get_investigator(
             },
             now=datetime.now(UTC),
         )
+        if key is not None:
+            ttl = max(1, min(int(os.getenv("AUTH_CACHE_TTL_SECONDS", "30")), 60))
+            _AUTH_CACHE[key] = (datetime.now(UTC) + timedelta(seconds=ttl), principal)
+        return principal
     except ApiKeyAuthenticationError as exc:
         status = 403 if "role" in str(exc) or "scope" in str(exc) else 401
         raise HTTPException(status_code=status, detail="not authorized") from exc
+    except Exception as exc:
+        cached = None if key is None else _AUTH_CACHE.get(key)
+        if (
+            cached is not None
+            and cached[0] > datetime.now(UTC)
+            and cached[1].environment == environment
+            and project_key in cached[1].project_scopes
+            and _eligible_cached_read(request)
+        ):
+            return cached[1]
+        raise HTTPException(
+            status_code=503, detail="authentication unavailable"
+        ) from exc
     finally:
         await database.close()
 

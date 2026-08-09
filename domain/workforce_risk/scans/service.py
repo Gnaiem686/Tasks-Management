@@ -42,7 +42,7 @@ class ScanStore(Protocol):
         target: ScanState,
         failure_reason: str | None = None,
     ) -> bool: ...
-    async def get(self, scan_run_id: str) -> ScanTicket | None: ...
+    async def get(self, scan_run_id: str, *, environment: str) -> ScanTicket | None: ...
 
 
 class ScanPipeline(Protocol):
@@ -101,4 +101,4 @@ class ScanService:
         return target
 
     async def status(self, scan_run_id: str) -> ScanTicket | None:
-        return await self._store.get(scan_run_id)
+        return await self._store.get(scan_run_id, environment=self._environment)

@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, Query, Response
 from pydantic import BaseModel, ConfigDict
+from workforce_contracts.auth import AuthenticatedPrincipal
 from workforce_risk.models import RiskResult
 
 from agent_api.dependencies import (
@@ -16,6 +17,8 @@ from agent_api.dependencies import (
     get_scoring_client,
 )
 from agent_api.errors import safe_error
+from agent_api.routes.investigations import get_investigator
+from agent_api.security.environment import enforce_project_scope
 
 router = APIRouter(prefix="/api/v1")
 
@@ -35,6 +38,7 @@ async def employee_overload_risk(
     employee_id: str,
     response: Response,
     project_key: Annotated[str, Query(min_length=1)],
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_investigator)],
     evidence_provider: Annotated[
         EmployeeEvidenceProvider, Depends(get_evidence_provider)
     ],
@@ -43,13 +47,7 @@ async def employee_overload_risk(
 ) -> Any:
     correlation_id = x_correlation_id or f"corr-{uuid4()}"
     response.headers["X-Correlation-ID"] = correlation_id
-    if project_key != "WRD":
-        return safe_error(
-            status_code=403,
-            error_code="PROJECT_NOT_ALLOWED",
-            message="The requested project is outside the configured scope.",
-            correlation_id=correlation_id,
-        )
+    enforce_project_scope(project_key, principal)
     try:
         evidence = await evidence_provider.get_employee_overload(
             employee_id, project_key, correlation_id

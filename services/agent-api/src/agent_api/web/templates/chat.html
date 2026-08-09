@@ -46,6 +46,20 @@
                 <p id="loading-state" role="status" aria-live="polite" hidden>Loading deterministic evidence…</p>
                 <p id="error-state" class="message error" aria-live="assertive" hidden></p>
             </section>
+            <section id="alert-inbox" class="panel" aria-labelledby="alerts-title">
+                <div class="result-heading">
+                    <h2 id="alerts-title">Manager alert inbox</h2>
+                    <button id="refresh-alerts" type="button" class="secondary">Refresh alerts</button>
+                </div>
+                <p id="alerts-status" role="status" aria-live="polite">Use the tab API key to load meaningful risks.</p>
+                <div class="table-scroll" tabindex="0" aria-label="Manager alert inbox">
+                    <table>
+                        <caption>Current business-risk alerts and recurrence history</caption>
+                        <thead><tr><th scope="col">Subject</th><th scope="col">Risk</th><th scope="col">Severity</th><th scope="col">State</th><th scope="col">Occurrences</th></tr></thead>
+                        <tbody id="alert-rows"></tbody>
+                    </table>
+                </div>
+            </section>
             <section id="risk-result" class="panel" aria-labelledby="risk-heading" hidden>
                 <div class="result-heading">
                     <div>
@@ -140,7 +154,8 @@
                 <p id="proposal-error" class="message error" role="alert" hidden></p>
                 <article id="proposal-review" hidden>
                     <p class="message warning" role="alert">
-                        Review every field. Approval does not execute Jira in this phase.
+                        Review every field. Approval does not execute Jira by itself;
+                        an exact structured approval starts the guarded execution workflow.
                         Stale or changed evidence closes the proposal.
                     </p>
                     <dl class="summary-grid">
@@ -229,6 +244,34 @@
                         Awaiting a structured manager decision. Jira has not been changed.
                     </p>
                 </article>
+            </section>
+            <section id="report-list" class="panel" aria-labelledby="reports-title">
+                <div class="result-heading">
+                    <h2 id="reports-title">Daily reports</h2>
+                    <button id="refresh-reports" type="button" class="secondary">Refresh reports</button>
+                </div>
+                <p id="reports-status" role="status" aria-live="polite">No reports loaded.</p>
+                <div class="table-scroll" tabindex="0" aria-label="Generated risk reports">
+                    <table>
+                        <caption>Immutable JSON report artifacts</caption>
+                        <thead><tr><th scope="col">Created</th><th scope="col">Type</th><th scope="col">State</th><th scope="col">Action</th></tr></thead>
+                        <tbody id="report-rows"></tbody>
+                    </table>
+                </div>
+            </section>
+            <section id="audit-history" class="panel" aria-labelledby="audit-title">
+                <div class="result-heading">
+                    <h2 id="audit-title">Administrator audit history</h2>
+                    <button id="refresh-audit" type="button" class="secondary">Refresh audit</button>
+                </div>
+                <p id="audit-status" role="status" aria-live="polite">Administrator access is required.</p>
+                <div class="table-scroll" tabindex="0" aria-label="Safe audit event history">
+                    <table>
+                        <caption>Append-only state transitions and chain status</caption>
+                        <thead><tr><th scope="col">Sequence</th><th scope="col">Action</th><th scope="col">Actor type</th><th scope="col">Support reference</th></tr></thead>
+                        <tbody id="audit-rows"></tbody>
+                    </table>
+                </div>
             </section>
         </main>
     </body>

@@ -20,4 +20,3 @@ def test_review_shows_exact_assignment_scores_confidence_and_freshness() -> None
     assert "/api/v1/proposals/" in script
     assert "simulation_payload" in script
     assert ".textContent" in script and "innerHTML" not in script
-

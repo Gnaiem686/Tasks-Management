@@ -73,9 +73,14 @@ class DatabaseScanStore:
             )
             return cast(CursorResult[Any], result).rowcount == 1
 
-    async def get(self, scan_run_id: str) -> ScanTicket | None:
+    async def get(self, scan_run_id: str, *, environment: str) -> ScanTicket | None:
         async with self._database.transaction() as session:
-            record = await session.get(ScanRun, uuid.UUID(scan_run_id))
+            record = await session.scalar(
+                select(ScanRun).where(
+                    ScanRun.id == uuid.UUID(scan_run_id),
+                    ScanRun.environment == environment,
+                )
+            )
             if record is None:
                 return None
             return ScanTicket(str(record.id), ScanState(record.state))

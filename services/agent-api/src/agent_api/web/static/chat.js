@@ -21,6 +21,71 @@ let loadedProposal = null;
 let proposalDecisionKey = null;
 let approvalInFlight = false;
 
+async function authenticatedRequest(path, options = {}) {
+  const apiKey = sessionStorage.getItem(tabKeyName);
+  if (!apiKey) throw new Error("Enter the environment API key first.");
+  const response = await fetch(`${path}${path.includes("?") ? "&" : "?"}project_key=WRD`, {
+    ...options,
+    headers: {Accept: "application/json", Authorization: `Bearer ${apiKey}`, ...(options.headers || {})},
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.detail || `Request failed (${response.status}).`);
+  return payload;
+}
+
+function renderTableRows(selector, items, values) {
+  const body = document.querySelector(selector);
+  body.replaceChildren();
+  for (const item of items) {
+    const row = document.createElement("tr");
+    for (const value of values(item)) {
+      const cell = document.createElement("td");
+      if (value instanceof Node) cell.appendChild(value); else cell.textContent = String(value ?? "—");
+      row.appendChild(cell);
+    }
+    body.appendChild(row);
+  }
+}
+
+async function loadAlerts() {
+  const status = document.querySelector("#alerts-status");
+  try {
+    const payload = await authenticatedRequest("/api/v1/alerts?page=1&page_size=20&sort=-created_at");
+    renderTableRows("#alert-rows", payload.items, (item) => [item.subject_id, item.risk_type, item.severity, item.state, item.recurrence_count]);
+    status.textContent = `${payload.total} alert${payload.total === 1 ? "" : "s"} loaded.`;
+  } catch (error) { status.textContent = error instanceof Error ? error.message : "Alerts unavailable."; }
+}
+
+async function loadReports() {
+  const status = document.querySelector("#reports-status");
+  try {
+    const payload = await authenticatedRequest("/api/v1/reports?page=1&page_size=20");
+    renderTableRows("#report-rows", payload.items, (item) => {
+      const button = document.createElement("button");
+      button.type = "button"; button.textContent = "Download JSON"; button.disabled = item.status !== "stored";
+      button.addEventListener("click", async () => {
+        const result = await authenticatedRequest(`/api/v1/reports/${encodeURIComponent(item.id)}/download`, {method: "POST"});
+        window.location.assign(result.url);
+      });
+      return [new Date(item.created_at).toLocaleString(), item.report_type, item.status, button];
+    });
+    status.textContent = `${payload.total} report${payload.total === 1 ? "" : "s"} loaded.`;
+  } catch (error) { status.textContent = error instanceof Error ? error.message : "Reports unavailable."; }
+}
+
+async function loadAudit() {
+  const status = document.querySelector("#audit-status");
+  try {
+    const payload = await authenticatedRequest("/api/v1/audit?page=1&page_size=20&sort=-sequence");
+    renderTableRows("#audit-rows", payload.items, (item) => [item.sequence_number, item.action_type, item.actor_type, item.correlation_id]);
+    status.textContent = payload.chain_valid ? "Audit chain verified." : "Audit chain validation failed; operator review required.";
+  } catch (error) { status.textContent = error instanceof Error ? error.message : "Audit unavailable."; }
+}
+
+document.querySelector("#refresh-alerts").addEventListener("click", loadAlerts);
+document.querySelector("#refresh-reports").addEventListener("click", loadReports);
+document.querySelector("#refresh-audit").addEventListener("click", loadAudit);
+
 const labels = {
   low: "✓ Low risk",
   medium: "! Medium risk",
@@ -160,7 +225,7 @@ async function pollProposal(proposalId, remaining = 10) {
   const payload = await proposalRequest(`/api/v1/proposals/${encodeURIComponent(proposalId)}`);
   renderProposal(payload);
   if (payload.state === "executing") {
-    setText("#operation-status", "executing. Jira has not been changed in this phase.");
+    setText("#operation-status", "executing. Waiting for Jira read-back verification.");
     setTimeout(() => pollProposal(proposalId, remaining - 1), 1000);
   }
 }
@@ -202,7 +267,7 @@ async function decideLoadedProposal(decision) {
     );
     renderProposal(payload);
     if (payload.state === "executing") {
-      setText("#operation-status", "executing. Jira has not been changed in this phase.");
+      setText("#operation-status", "executing. Waiting for Jira read-back verification.");
       setTimeout(() => pollProposal(payload.proposal_id), 1000);
     }
   } catch (error) {
@@ -281,7 +346,7 @@ form.addEventListener("submit", async (event) => {
     const employee = encodeURIComponent(employeeSelect.value);
     const response = await fetch(
       `/api/v1/employees/${employee}/overload-risk?project_key=WRD`,
-      {headers: {Accept: "application/json"}},
+      {headers: {Accept: "application/json", Authorization: `Bearer ${sessionStorage.getItem(tabKeyName) || ""}`}},
     );
     const payload = await response.json();
     if (!response.ok) {

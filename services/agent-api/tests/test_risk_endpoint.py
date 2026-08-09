@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from agent_api.auth.roles import ApplicationRole
 from agent_api.dependencies import (
     EvidenceBundle,
     FixtureEvidenceProvider,
@@ -16,8 +17,10 @@ from agent_api.dependencies import (
     get_scoring_client,
 )
 from agent_api.main import app
+from agent_api.routes.investigations import get_investigator
 from httpx import ASGITransport, AsyncClient, Response
 from jira_mcp_client.normalize import normalize_issue
+from workforce_contracts.auth import AuthenticatedPrincipal
 from workforce_risk.models import EmployeeOverloadInput
 
 ROOT = Path(__file__).parents[3]
@@ -72,6 +75,15 @@ class ScoringClient(WorkforceScoringClient):
 @pytest.fixture(autouse=True)
 def clear_overrides() -> Generator[None, None, None]:
     app.dependency_overrides.clear()
+    app.dependency_overrides[get_investigator] = dependency_returning(
+        AuthenticatedPrincipal(
+            actor_id="viewer-test",
+            display_label="Viewer",
+            role=ApplicationRole.VIEWER,
+            environment="test",
+            project_scopes=("WRD",),
+        )
+    )
     yield
     app.dependency_overrides.clear()
 

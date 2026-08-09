@@ -29,7 +29,7 @@ class Store:
         self.state = target
         return True
 
-    async def get(self, scan_run_id: str) -> ScanTicket | None:
+    async def get(self, scan_run_id: str, *, environment: str) -> ScanTicket | None:
         return ScanTicket(scan_run_id, self.state)
 
 

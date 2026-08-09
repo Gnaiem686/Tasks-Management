@@ -65,4 +65,3 @@ def build_model_payload(request: ExplanationRequest) -> dict[str, object]:
         "candidate_ids": list(request.candidate_ids),
         "correlation_id": request.correlation_id,
     }
-
