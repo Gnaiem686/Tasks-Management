@@ -241,6 +241,7 @@ class ScanRun(RecordMixin, Base):
     scope: Mapped[str] = mapped_column(String(256), nullable=False)
     state: Mapped[str] = mapped_column(String(32), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    correlation_id: Mapped[str] = mapped_column(String(128), nullable=False)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     failure_reason: Mapped[str | None] = mapped_column(Text)
