@@ -229,6 +229,11 @@ class ReportMetadata(RecordMixin, Base):
     object_version: Mapped[str | None] = mapped_column(String(256))
     checksum: Mapped[str | None] = mapped_column(String(128))
     idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    __table_args__ = (
+        UniqueConstraint(
+            "environment", "idempotency_key", name="uq_reports_env_idempotency"
+        ),
+    )
 
 
 class ScanRun(RecordMixin, Base):

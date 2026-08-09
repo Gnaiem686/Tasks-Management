@@ -1,0 +1,1 @@
+"""Immutable risk-report generation."""
