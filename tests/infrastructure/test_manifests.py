@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any, cast
 
 import yaml
 
@@ -6,8 +7,10 @@ ROOT = Path(__file__).parents[2]
 K8S = ROOT / "infra" / "kubernetes"
 
 
-def _documents(path: Path) -> list[dict]:
-    return [doc for doc in yaml.safe_load_all(path.read_text()) if doc]
+def _documents(path: Path) -> list[dict[str, Any]]:
+    return [
+        cast(dict[str, Any], doc) for doc in yaml.safe_load_all(path.read_text()) if doc
+    ]
 
 
 def _all_yaml() -> str:
