@@ -133,7 +133,21 @@ class CommentEvidence(RecordMixin, Base):
     author_reference: Mapped[str | None] = mapped_column(String(256))
     author_type: Mapped[str] = mapped_column(String(32), nullable=False)
     attribution_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    comment_created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    freshness: Mapped[str] = mapped_column(String(32), nullable=False)
+    availability_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    observation_fingerprint: Mapped[str] = mapped_column(String(128), nullable=False)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    __table_args__ = (
+        UniqueConstraint(
+            "environment",
+            "jira_comment_id",
+            "observation_fingerprint",
+            name="uq_comment_evidence_observation",
+        ),
+    )
 
 
 class ReassignmentProposal(RecordMixin, Base):

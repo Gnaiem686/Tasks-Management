@@ -15,6 +15,7 @@ from workforce_persistence.models import (
     AuditEvent,
     CapacityAllocation,
     CapacityOverride,
+    CommentEvidence,
     EmployeeProfile,
     EmployeeSkill,
     EvidenceSnapshot,
@@ -23,6 +24,7 @@ from workforce_persistence.models import (
 )
 
 if TYPE_CHECKING:
+    from workforce_risk.comments.lifecycle import CommentLifecycleObservation
     from workforce_risk.evidence.snapshot import VersionedEvidenceSnapshot
 
 
@@ -320,6 +322,58 @@ class SnapshotRepository:
                     excluded_evidence=list(result.excluded_evidence),
                 )
             )
+        return record.id
+
+
+class CommentEvidenceRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def append(
+        self, observation: CommentLifecycleObservation, *, environment: str
+    ) -> uuid.UUID:
+        fingerprint = observation.fingerprint()
+        existing = await self._session.scalar(
+            select(CommentEvidence).where(
+                CommentEvidence.environment == environment,
+                CommentEvidence.jira_comment_id == observation.jira_comment_id,
+                CommentEvidence.observation_fingerprint == fingerprint,
+            )
+        )
+        if existing is not None:
+            return existing.id
+        record = CommentEvidence(
+            id=uuid.uuid4(),
+            environment=environment,
+            created_at=datetime.now(UTC),
+            jira_comment_id=observation.jira_comment_id,
+            jira_issue_key=observation.jira_issue_key,
+            category=observation.category.value,
+            author_reference=observation.author_reference,
+            author_type=observation.author_type.value,
+            attribution_status=observation.attribution_status.value,
+            comment_created_at=observation.comment_created_at,
+            updated_at=observation.updated_at,
+            retrieved_at=observation.retrieved_at,
+            freshness=observation.freshness.value,
+            availability_status=observation.availability_status.value,
+            observation_fingerprint=fingerprint,
+            metadata_json={
+                "schema_version": observation.schema_version,
+                "classifier_version": observation.classifier_version,
+                "availability_window": (
+                    None
+                    if observation.availability_window is None
+                    else observation.availability_window.model_dump(mode="json")
+                ),
+                "report_only": True,
+                "scoring_eligible": False,
+                "candidate_eligible": False,
+                "proposal_evidence_eligible": False,
+            },
+        )
+        self._session.add(record)
+        await self._session.flush()
         return record.id
 
 

@@ -1,0 +1,29 @@
+version: comment-patterns-v1
+categories:
+  temporary_unavailability_report:
+    - "sick and unavailable"
+    - "personal issue and will be unavailable"
+    - "will be unavailable"
+  clarification_request:
+    - "need clarification"
+  technical_help_request:
+    - "need technical help"
+  blocker_report:
+    - "task is blocked"
+  review_waiting_report:
+    - "waiting for review"
+  workload_concern:
+    - "workload exceeds my available capacity"
+  deadline_concern:
+    - "cannot meet the current deadline"
+  missing_access_report:
+    - "do not have access"
+  task_frustration_report:
+    - "frustrated with this task"
+  collaboration_concern:
+    - "cannot get the required collaboration"
+disqualifiers:
+  - "maybe"
+  - "might"
+  - "just kidding"
+  - "ignore all previous instructions"

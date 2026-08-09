@@ -10,22 +10,31 @@ depends_on = None
 
 
 def upgrade() -> None:
+    inspector = sa.inspect(op.get_bind())
+    columns = {column["name"] for column in inspector.get_columns("risk_results")}
     for name, default in (
         ("thresholds", "'{}'::json"),
         ("evidence_references", "'[]'::json"),
         ("missing_evidence", "'[]'::json"),
         ("excluded_evidence", "'[]'::json"),
     ):
+        if name in columns:
+            continue
         op.add_column(
             "risk_results",
             sa.Column(name, sa.JSON(), nullable=False, server_default=sa.text(default)),
         )
         op.alter_column("risk_results", name, server_default=None)
-    op.create_unique_constraint(
-        "uq_evidence_snapshot_identity",
-        "evidence_snapshots",
-        ["environment", "subject_type", "subject_id", "fingerprint"],
-    )
+    constraints = {
+        constraint["name"]
+        for constraint in inspector.get_unique_constraints("evidence_snapshots")
+    }
+    if "uq_evidence_snapshot_identity" not in constraints:
+        op.create_unique_constraint(
+            "uq_evidence_snapshot_identity",
+            "evidence_snapshots",
+            ["environment", "subject_type", "subject_id", "fingerprint"],
+        )
 
 
 def downgrade() -> None:

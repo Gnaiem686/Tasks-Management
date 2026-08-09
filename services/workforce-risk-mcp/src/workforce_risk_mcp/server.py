@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
@@ -7,8 +8,17 @@ from typing import Any, Literal, cast
 
 from mcp.server.fastmcp import Context, FastMCP
 from workforce_persistence.database import Database
-from workforce_persistence.repositories import ProfileRepository, SnapshotRepository
+from workforce_persistence.repositories import (
+    CommentEvidenceRepository,
+    ProfileRepository,
+    SnapshotRepository,
+)
+from workforce_risk.comments.classifier import CommentClassifier, load_patterns
 
+from workforce_risk_mcp.tools.comment_evidence import (
+    NormalizeCommentRequest,
+    normalize_comment_evidence,
+)
 from workforce_risk_mcp.tools.evidence import PersistEvidenceRequest, persist_evidence
 from workforce_risk_mcp.tools.profiles import (
     ProfileCapacityUpdate,
@@ -30,6 +40,7 @@ HOST = os.getenv("WORKFORCE_MCP_HOST", "127.0.0.1")
 PORT = int(os.getenv("WORKFORCE_MCP_PORT", "8001"))
 ENVIRONMENT = os.getenv("APP_ENVIRONMENT", "dev")
 CONFIG_PATH = Path(os.getenv("SCORING_CONFIG_PATH", "config/scoring/v1.yaml"))
+COMMENT_CONFIG_PATH = Path(os.getenv("COMMENT_PATTERN_PATH", "config/comments/v1.yaml"))
 
 mcp = FastMCP(
     "Workforce Risk MCP",
@@ -87,6 +98,35 @@ async def persist_evidence_snapshot_tool(request: dict[str, Any]) -> dict[str, A
             response = await persist_evidence(
                 PersistEvidenceRequest.model_validate(request),
                 repository=SnapshotRepository(session),
+                service_environment=ENVIRONMENT,
+            )
+            return response.model_dump(mode="json")
+    finally:
+        await database.close()
+
+
+@mcp.tool(name="normalize_comment_evidence")
+async def normalize_comment_evidence_tool(request: dict[str, Any]) -> dict[str, Any]:
+    """Persist only conservative normalized metadata; discard the raw body."""
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        raise RuntimeError("comment evidence persistence is not configured")
+    classifier = CommentClassifier(
+        load_patterns(COMMENT_CONFIG_PATH),
+        employee_accounts=json.loads(os.getenv("WORKFORCE_JIRA_ACCOUNT_MAP", "{}")),
+        manager_accounts=set(json.loads(os.getenv("JIRA_MANAGER_ACCOUNTS", "[]"))),
+        reviewer_accounts=set(json.loads(os.getenv("JIRA_REVIEWER_ACCOUNTS", "[]"))),
+        automation_accounts=set(
+            json.loads(os.getenv("JIRA_AUTOMATION_ACCOUNTS", "[]"))
+        ),
+    )
+    database = Database(database_url)
+    try:
+        async with database.transaction() as session:
+            response = await normalize_comment_evidence(
+                NormalizeCommentRequest.model_validate(request),
+                classifier=classifier,
+                repository=CommentEvidenceRepository(session),
                 service_environment=ENVIRONMENT,
             )
             return response.model_dump(mode="json")
