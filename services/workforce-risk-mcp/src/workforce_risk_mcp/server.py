@@ -7,8 +7,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, cast
 
+from jira_mcp_client.mutation import JiraAssigneeMutationClient
+from jira_mcp_client.transport import StreamableHttpJiraMcpTransport
 from mcp.server.fastmcp import Context, FastMCP
 from workforce_persistence.database import Database
+from workforce_persistence.execution_repository import (
+    DatabaseExecutionStore,
+    DatabaseReconciliationStore,
+)
 from workforce_persistence.proposal_repository import ProposalRepository
 from workforce_persistence.repositories import (
     CommentEvidenceRepository,
@@ -16,12 +22,18 @@ from workforce_persistence.repositories import (
     SnapshotRepository,
 )
 from workforce_risk.comments.classifier import CommentClassifier, load_patterns
+from workforce_risk.proposals.execution import ReassignmentExecutionService
+from workforce_risk.proposals.reconciliation import ReconciliationService
 
 from workforce_risk_mcp.tools.comment_evidence import (
     NormalizeCommentRequest,
     normalize_comment_evidence,
 )
 from workforce_risk_mcp.tools.evidence import PersistEvidenceRequest, persist_evidence
+from workforce_risk_mcp.tools.execution import (
+    ExecuteProposalRequest,
+    execute_reassignment,
+)
 from workforce_risk_mcp.tools.profiles import (
     ProfileCapacityUpdate,
     ProfileCreateRequest,
@@ -36,6 +48,10 @@ from workforce_risk_mcp.tools.proposals import (
     create_proposal,
     decide_proposal,
     get_proposal,
+)
+from workforce_risk_mcp.tools.reconciliation import (
+    ReconcileProposalRequest,
+    reconcile_proposal,
 )
 from workforce_risk_mcp.tools.score_overload import (
     ScoreOverloadRequest,
@@ -364,6 +380,109 @@ async def get_reassignment_proposal_tool(
                     repository=ProposalRepository(session),
                 )
             )
+    finally:
+        await database.close()
+
+
+@mcp.tool(name="execute_reassignment")
+async def execute_reassignment_tool(
+    request: dict[str, Any], ctx: Context[Any, Any, Any]
+) -> dict[str, Any]:
+    """Execute the sole approved Jira mutation after proposal safeguards pass."""
+    validated = ExecuteProposalRequest.model_validate(request)
+    secret = os.getenv("INTERNAL_AUTH_SECRET")
+    database_url = os.getenv("DATABASE_URL")
+    jira_authorization = os.getenv("JIRA_MCP_AUTH_HEADER")
+    jira_url = os.getenv("ATLASSIAN_MCP_URL", "https://mcp.atlassian.com/v1/mcp")
+    jira_cloud_id = os.getenv("JIRA_CLOUD_ID")
+    mutation_enabled = os.getenv("JIRA_MUTATION_ENABLED", "false").lower() == "true"
+    if (
+        not secret
+        or not database_url
+        or not jira_authorization
+        or not jira_cloud_id
+        or not mutation_enabled
+        or ENVIRONMENT != "dev"
+    ):
+        raise RuntimeError("Jira reassignment execution is not configured")
+    verified = authorize_proposal(
+        transport_context=_transport_context(ctx),
+        secret=secret.encode(),
+        environment="dev",
+        project_key=validated.project_key,
+        now=datetime.now(UTC),
+    )
+    database = Database(database_url)
+    try:
+        transport = StreamableHttpJiraMcpTransport(
+            url=jira_url,
+            cloud_id=jira_cloud_id,
+            environment="dev",
+            authorization_header=jira_authorization,
+        )
+        service = ReassignmentExecutionService(
+            store=DatabaseExecutionStore(database, environment="dev"),
+            mutator=JiraAssigneeMutationClient(
+                transport=transport,
+                environment="dev",
+                allowed_project_keys=set(verified.project_scopes),
+            ),
+        )
+        result = await execute_reassignment(
+            validated,
+            service=service,
+            correlation_id=verified.correlation_id,
+        )
+        return result.model_dump(mode="json")
+    finally:
+        await database.close()
+
+
+@mcp.tool(name="reconcile_uncertain_reassignment")
+async def reconcile_uncertain_reassignment_tool(
+    request: dict[str, Any], ctx: Context[Any, Any, Any]
+) -> dict[str, Any]:
+    """Allow an authorized manager to resolve uncertainty from a fresh Jira read."""
+    validated = ReconcileProposalRequest.model_validate(request)
+    secret = os.getenv("INTERNAL_AUTH_SECRET")
+    database_url = os.getenv("DATABASE_URL")
+    jira_authorization = os.getenv("JIRA_MCP_AUTH_HEADER")
+    jira_cloud_id = os.getenv("JIRA_CLOUD_ID")
+    if not secret or not database_url or not jira_authorization or not jira_cloud_id:
+        raise RuntimeError("Jira reconciliation is not configured")
+    verified = authorize_proposal(
+        transport_context=_transport_context(ctx),
+        secret=secret.encode(),
+        environment=cast(Literal["dev", "prod", "test"], ENVIRONMENT),
+        project_key=validated.project_key,
+        now=datetime.now(UTC),
+    )
+    database = Database(database_url)
+    try:
+        reader = JiraAssigneeMutationClient(
+            transport=StreamableHttpJiraMcpTransport(
+                url=os.getenv("ATLASSIAN_MCP_URL", "https://mcp.atlassian.com/v1/mcp"),
+                cloud_id=jira_cloud_id,
+                environment=ENVIRONMENT,
+                authorization_header=jira_authorization,
+            ),
+            environment=ENVIRONMENT,
+            allowed_project_keys=set(verified.project_scopes),
+        )
+        result = await reconcile_proposal(
+            validated,
+            service=ReconciliationService(
+                store=DatabaseReconciliationStore(database, environment=ENVIRONMENT),
+                reader=reader,
+            ),
+            worker_id=f"manager:{verified.actor_id}",
+        )
+        return {
+            "schema_version": "1.0",
+            "environment": ENVIRONMENT,
+            "correlation_id": verified.correlation_id,
+            "result": None if result is None else result.model_dump(mode="json"),
+        }
     finally:
         await database.close()
 

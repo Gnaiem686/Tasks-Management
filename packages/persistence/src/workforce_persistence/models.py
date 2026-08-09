@@ -195,9 +195,7 @@ class ReassignmentSimulation(RecordMixin, Base):
     scoring_versions: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     safe_payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     __table_args__ = (
-        UniqueConstraint(
-            "environment", "simulation_id", name="uq_simulation_env_id"
-        ),
+        UniqueConstraint("environment", "simulation_id", name="uq_simulation_env_id"),
     )
 
 
@@ -225,6 +223,16 @@ class ProposalExecution(RecordMixin, Base):
     state: Mapped[str] = mapped_column(String(32), nullable=False)
     external_correlation_id: Mapped[str | None] = mapped_column(String(128))
     result: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    write_attempted: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    lease_owner: Mapped[str | None] = mapped_column(String(128))
+    leased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (
+        UniqueConstraint(
+            "environment", "proposal_id", name="uq_execution_env_proposal"
+        ),
+    )
 
 
 class Alert(RecordMixin, Base):
