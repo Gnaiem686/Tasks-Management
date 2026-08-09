@@ -199,15 +199,26 @@ class ProposalExecution(RecordMixin, Base):
 class Alert(RecordMixin, Base):
     __tablename__ = "alerts"
     subject_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    risk_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    scoring_window: Mapped[str] = mapped_column(String(64), nullable=False)
+    dedup_key: Mapped[str] = mapped_column(String(128), nullable=False)
     state: Mapped[str] = mapped_column(String(32), nullable=False)
     severity: Mapped[str] = mapped_column(String(32), nullable=False)
+    evidence_fingerprint: Mapped[str] = mapped_column(String(128), nullable=False)
+    last_notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    __table_args__ = (
+        UniqueConstraint("environment", "dedup_key", name="uq_alerts_env_dedup"),
+    )
 
 
 class AlertOccurrence(RecordMixin, Base):
     __tablename__ = "alert_occurrences"
     alert_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("alerts.id"))
     risk_result_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("risk_results.id"))
+    sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    severity: Mapped[str] = mapped_column(String(32), nullable=False)
+    evidence_fingerprint: Mapped[str] = mapped_column(String(128), nullable=False)
 
 
 class ReportMetadata(RecordMixin, Base):
@@ -251,7 +262,9 @@ class OutboxEvent(RecordMixin, Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_error: Mapped[str | None] = mapped_column(Text)
     __table_args__ = (
-        UniqueConstraint("consumer_key", name="uq_outbox_events_consumer_key"),
+        UniqueConstraint(
+            "environment", "consumer_key", name="uq_outbox_events_consumer_key"
+        ),
     )
 
 
