@@ -99,6 +99,15 @@ class EvidenceSnapshot(RecordMixin, Base):
     fingerprint: Mapped[str] = mapped_column(String(128), nullable=False)
     evidence: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (
+        UniqueConstraint(
+            "environment",
+            "subject_type",
+            "subject_id",
+            "fingerprint",
+            name="uq_evidence_snapshot_identity",
+        ),
+    )
 
 
 class RiskResultRecord(RecordMixin, Base):
@@ -110,6 +119,10 @@ class RiskResultRecord(RecordMixin, Base):
     confidence: Mapped[str] = mapped_column(String(32), nullable=False)
     scoring_version: Mapped[str] = mapped_column(String(128), nullable=False)
     factors: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    thresholds: Mapped[dict[str, int]] = mapped_column(JSON, nullable=False)
+    evidence_references: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    missing_evidence: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    excluded_evidence: Mapped[list[str]] = mapped_column(JSON, nullable=False)
 
 
 class CommentEvidence(RecordMixin, Base):

@@ -5,7 +5,7 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy import select, update
 from sqlalchemy.engine import CursorResult
@@ -17,8 +17,13 @@ from workforce_persistence.models import (
     CapacityOverride,
     EmployeeProfile,
     EmployeeSkill,
+    EvidenceSnapshot,
+    RiskResultRecord,
     ScoringVersion,
 )
+
+if TYPE_CHECKING:
+    from workforce_risk.evidence.snapshot import VersionedEvidenceSnapshot
 
 
 @dataclass(frozen=True)
@@ -249,6 +254,73 @@ class ScoringVersionRepository:
             .values(activated_at=datetime.now(UTC), activated_by=actor_id)
         )
         return cast(CursorResult[Any], result).rowcount == 1
+
+
+class SnapshotRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def persist(
+        self,
+        snapshot: VersionedEvidenceSnapshot,
+        *,
+        subject_type: str,
+        service_environment: str | None = None,
+    ) -> uuid.UUID:
+        evidence = snapshot.evidence
+        if (
+            service_environment is not None
+            and evidence.environment != service_environment
+        ):
+            raise ValueError("snapshot environment mismatch")
+        existing = await self._session.scalar(
+            select(EvidenceSnapshot).where(
+                EvidenceSnapshot.environment == evidence.environment,
+                EvidenceSnapshot.subject_type == subject_type,
+                EvidenceSnapshot.subject_id == evidence.subject_id,
+                EvidenceSnapshot.fingerprint == snapshot.fingerprint,
+            )
+        )
+        if existing is not None:
+            return existing.id
+        record = EvidenceSnapshot(
+            id=uuid.uuid4(),
+            environment=evidence.environment,
+            created_at=datetime.now(UTC),
+            subject_type=subject_type,
+            subject_id=evidence.subject_id,
+            fingerprint=snapshot.fingerprint,
+            evidence={
+                **evidence.canonical_material(),
+                "evidence_timestamp": evidence.evidence_timestamp.isoformat(),
+            },
+            observed_at=evidence.evidence_timestamp,
+        )
+        self._session.add(record)
+        await self._session.flush()
+        for snapshot_result in snapshot.risk_results:
+            result = snapshot_result.result
+            self._session.add(
+                RiskResultRecord(
+                    id=uuid.uuid4(),
+                    environment=evidence.environment,
+                    created_at=datetime.now(UTC),
+                    snapshot_id=record.id,
+                    score_family=snapshot_result.score_family,
+                    score=result.score,
+                    level=None if result.level is None else result.level.value,
+                    confidence=result.confidence.value,
+                    scoring_version=result.scoring_model_version,
+                    factors=[
+                        factor.model_dump(mode="json") for factor in result.factors
+                    ],
+                    thresholds=result.thresholds,
+                    evidence_references=list(result.evidence_references),
+                    missing_evidence=list(result.missing_evidence),
+                    excluded_evidence=list(result.excluded_evidence),
+                )
+            )
+        return record.id
 
 
 class AuditRepository:

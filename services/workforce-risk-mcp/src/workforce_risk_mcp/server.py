@@ -7,8 +7,9 @@ from typing import Any, Literal, cast
 
 from mcp.server.fastmcp import Context, FastMCP
 from workforce_persistence.database import Database
-from workforce_persistence.repositories import ProfileRepository
+from workforce_persistence.repositories import ProfileRepository, SnapshotRepository
 
+from workforce_risk_mcp.tools.evidence import PersistEvidenceRequest, persist_evidence
 from workforce_risk_mcp.tools.profiles import (
     ProfileCapacityUpdate,
     ProfileCreateRequest,
@@ -72,6 +73,25 @@ def score_project_delivery_mcp_tool(request: dict[str, Any]) -> dict[str, Any]:
         service_environment=ENVIRONMENT,
     )
     return response.model_dump(mode="json")
+
+
+@mcp.tool(name="persist_evidence_snapshot")
+async def persist_evidence_snapshot_tool(request: dict[str, Any]) -> dict[str, Any]:
+    """Persist immutable structured evidence and deterministic results atomically."""
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        raise RuntimeError("snapshot persistence is not configured")
+    database = Database(database_url)
+    try:
+        async with database.transaction() as session:
+            response = await persist_evidence(
+                PersistEvidenceRequest.model_validate(request),
+                repository=SnapshotRepository(session),
+                service_environment=ENVIRONMENT,
+            )
+            return response.model_dump(mode="json")
+    finally:
+        await database.close()
 
 
 @mcp.tool(name="update_profile_capacity")
