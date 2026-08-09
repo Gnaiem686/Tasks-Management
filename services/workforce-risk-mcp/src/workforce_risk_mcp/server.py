@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, cast
 
 from mcp.server.fastmcp import Context, FastMCP
 from workforce_persistence.database import Database
+from workforce_persistence.proposal_repository import ProposalRepository
 from workforce_persistence.repositories import (
     CommentEvidenceRepository,
     ProfileRepository,
@@ -25,6 +27,14 @@ from workforce_risk_mcp.tools.profiles import (
     ProfileCreateRequest,
     authorize_profile_change,
 )
+from workforce_risk_mcp.tools.proposals import (
+    FreshnessProvider,
+    ProposalCreateRequest,
+    ProposalDecisionRequest,
+    authorize_proposal,
+    create_proposal,
+    decide_proposal,
+)
 from workforce_risk_mcp.tools.score_overload import (
     ScoreOverloadRequest,
     score_overload,
@@ -41,6 +51,16 @@ PORT = int(os.getenv("WORKFORCE_MCP_PORT", "8001"))
 ENVIRONMENT = os.getenv("APP_ENVIRONMENT", "dev")
 CONFIG_PATH = Path(os.getenv("SCORING_CONFIG_PATH", "config/scoring/v1.yaml"))
 COMMENT_CONFIG_PATH = Path(os.getenv("COMMENT_PATTERN_PATH", "config/comments/v1.yaml"))
+
+
+class FailClosedFreshnessProvider:
+    async def fingerprint_for_proposal(self, proposal_id: str) -> str:
+        raise RuntimeError("targeted Jira freshness provider is not configured")
+
+
+def get_proposal_freshness_provider() -> FreshnessProvider:
+    return FailClosedFreshnessProvider()
+
 
 mcp = FastMCP(
     "Workforce Risk MCP",
@@ -245,6 +265,73 @@ async def create_profile_tool(
                 "jira_account_id": created.jira_account_id,
                 "version": created.version,
             }
+    finally:
+        await database.close()
+
+
+def _transport_context(ctx: Context[Any, Any, Any]) -> str | None:
+    request = ctx.request_context.request
+    if request is not None and hasattr(request, "headers"):
+        value = request.headers.get("X-Workforce-Authorization")
+        return value if isinstance(value, str) else None
+    return None
+
+
+@mcp.tool(name="create_reassignment_proposal")
+async def create_reassignment_proposal_tool(
+    request: dict[str, Any], ctx: Context[Any, Any, Any]
+) -> dict[str, Any]:
+    validated = ProposalCreateRequest.model_validate(request)
+    secret = os.getenv("INTERNAL_AUTH_SECRET")
+    database_url = os.getenv("DATABASE_URL")
+    if not secret or not database_url:
+        raise RuntimeError("protected proposal service is not configured")
+    verified = authorize_proposal(
+        transport_context=_transport_context(ctx),
+        secret=secret.encode(),
+        environment=cast(Literal["dev", "prod", "test"], ENVIRONMENT),
+        project_key=validated.project_key,
+        now=datetime.now(UTC),
+    )
+    database = Database(database_url)
+    try:
+        async with database.transaction() as session:
+            result = await create_proposal(
+                validated,
+                context=verified,
+                repository=ProposalRepository(session),
+            )
+            return asdict(result)
+    finally:
+        await database.close()
+
+
+@mcp.tool(name="decide_reassignment_proposal")
+async def decide_reassignment_proposal_tool(
+    request: dict[str, Any], ctx: Context[Any, Any, Any]
+) -> dict[str, Any]:
+    validated = ProposalDecisionRequest.model_validate(request)
+    secret = os.getenv("INTERNAL_AUTH_SECRET")
+    database_url = os.getenv("DATABASE_URL")
+    if not secret or not database_url:
+        raise RuntimeError("protected proposal service is not configured")
+    verified = authorize_proposal(
+        transport_context=_transport_context(ctx),
+        secret=secret.encode(),
+        environment=cast(Literal["dev", "prod", "test"], ENVIRONMENT),
+        project_key=validated.project_key,
+        now=datetime.now(UTC),
+    )
+    database = Database(database_url)
+    try:
+        async with database.transaction() as session:
+            result = await decide_proposal(
+                validated,
+                context=verified,
+                repository=ProposalRepository(session),
+                freshness=get_proposal_freshness_provider(),
+            )
+            return asdict(result)
     finally:
         await database.close()
 

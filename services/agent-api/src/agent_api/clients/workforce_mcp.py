@@ -88,3 +88,33 @@ class StreamableHttpProfileClient:
         if not isinstance(result, dict):
             raise ValueError("Workforce MCP profile response is invalid")
         return result
+
+
+class StreamableHttpProposalClient(StreamableHttpProfileClient):
+    async def create_proposal(
+        self,
+        *,
+        request: dict[str, Any],
+        principal: AuthenticatedPrincipal,
+        correlation_id: str,
+    ) -> dict[str, Any]:
+        return await self._call(
+            tool_name="create_reassignment_proposal",
+            arguments={"request": request},
+            principal=principal,
+            correlation_id=correlation_id,
+        )
+
+    async def decide_proposal(
+        self,
+        *,
+        request: dict[str, Any],
+        principal: AuthenticatedPrincipal,
+        correlation_id: str,
+    ) -> dict[str, Any]:
+        return await self._call(
+            tool_name="decide_reassignment_proposal",
+            arguments={"request": request},
+            principal=principal,
+            correlation_id=correlation_id,
+        )

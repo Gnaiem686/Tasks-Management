@@ -152,12 +152,18 @@ class CommentEvidence(RecordMixin, Base):
 
 class ReassignmentProposal(RecordMixin, Base):
     __tablename__ = "reassignment_proposals"
+    simulation_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    project_key: Mapped[str] = mapped_column(String(64), nullable=False)
     task_key: Mapped[str] = mapped_column(String(64), nullable=False)
     expected_assignee: Mapped[str] = mapped_column(String(256), nullable=False)
     proposed_assignee: Mapped[str] = mapped_column(String(256), nullable=False)
     state: Mapped[str] = mapped_column(String(32), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
     evidence_fingerprint: Mapped[str] = mapped_column(String(128), nullable=False)
+    confidence: Mapped[str] = mapped_column(String(32), nullable=False)
+    scoring_versions: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    simulation_payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    requested_by: Mapped[str] = mapped_column(String(128), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
@@ -176,6 +182,25 @@ class ReassignmentProposal(RecordMixin, Base):
     )
 
 
+class ReassignmentSimulation(RecordMixin, Base):
+    __tablename__ = "reassignment_simulations"
+    simulation_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    project_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    task_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    current_assignee: Mapped[str] = mapped_column(String(256), nullable=False)
+    proposed_assignee: Mapped[str] = mapped_column(String(256), nullable=False)
+    candidate_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    confidence: Mapped[str] = mapped_column(String(32), nullable=False)
+    evidence_fingerprint: Mapped[str] = mapped_column(String(128), nullable=False)
+    scoring_versions: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    safe_payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    __table_args__ = (
+        UniqueConstraint(
+            "environment", "simulation_id", name="uq_simulation_env_id"
+        ),
+    )
+
+
 class ApprovalDecision(RecordMixin, Base):
     __tablename__ = "approval_decisions"
     proposal_id: Mapped[uuid.UUID] = mapped_column(
@@ -184,6 +209,12 @@ class ApprovalDecision(RecordMixin, Base):
     actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
     decision: Mapped[str] = mapped_column(String(16), nullable=False)
     correlation_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    __table_args__ = (
+        UniqueConstraint(
+            "environment", "idempotency_key", name="uq_decision_env_idempotency"
+        ),
+    )
 
 
 class ProposalExecution(RecordMixin, Base):
