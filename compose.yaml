@@ -111,6 +111,11 @@ services:
       API_KEY_HMAC_PEPPER: local-only-pepper-with-at-least-thirty-two-bytes
       INTERNAL_AUTH_SECRET: local-integration-secret-change-before-deploy
       JIRA_PROJECT_KEY: WRD
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      BEDROCK_MODEL_ID: ${BEDROCK_MODEL_ID:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:

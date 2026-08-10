@@ -5,9 +5,25 @@ from datetime import UTC, datetime
 
 import pytest
 from agent_api.llm.bedrock import BedrockExplanationProvider
+from agent_api.llm.factory import get_explanation_provider
 from agent_api.llm.fallback import DeterministicFallbackProvider
 from agent_api.llm.schemas import ExplanationRequest
 from workforce_risk.models import RiskResult
+
+
+def test_explanation_provider_uses_fallback_without_bedrock_configuration(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("BEDROCK_MODEL_ID", raising=False)
+    assert isinstance(get_explanation_provider(), DeterministicFallbackProvider)
+
+
+def test_explanation_provider_selects_bedrock_when_model_is_configured(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("BEDROCK_MODEL_ID", "test.model-v1")
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    assert isinstance(get_explanation_provider(), BedrockExplanationProvider)
 
 
 def risk_result() -> RiskResult:

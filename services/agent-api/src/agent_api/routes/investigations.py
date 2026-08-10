@@ -38,7 +38,8 @@ from agent_api.graph.state import (
     VerifiedAgentContext,
 )
 from agent_api.graph.workflow import InvestigationWorkflow
-from agent_api.llm.fallback import DeterministicFallbackProvider
+from agent_api.llm.factory import get_explanation_provider
+from agent_api.llm.protocol import ExplanationProvider
 
 router = APIRouter(prefix="/api/v1")
 
@@ -167,6 +168,7 @@ async def investigate(
     principal: Annotated[AuthenticatedPrincipal, Depends(get_investigator)],
     evidence: Annotated[EmployeeEvidenceProvider, Depends(get_evidence_provider)],
     scoring: Annotated[WorkforceScoringClient, Depends(get_scoring_client)],
+    explainer: Annotated[ExplanationProvider, Depends(get_explanation_provider)],
     x_correlation_id: Annotated[str | None, Header()] = None,
 ) -> InvestigationResponse:
     if payload.context.project_key != project_key:
@@ -193,7 +195,7 @@ async def investigate(
     )
     workflow = InvestigationWorkflow(
         tool=specialist_router,
-        explainer=DeterministicFallbackProvider(),
+        explainer=explainer,
     )
     response.headers["X-Correlation-ID"] = correlation_id
     try:
