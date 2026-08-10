@@ -6,6 +6,9 @@ __pycache__
 .pytest_cache
 .mypy_cache
 .ruff_cache
+.uv-cache
+.local-tools
+**/.terraform
 .coverage
 coverage.xml
 htmlcov
@@ -15,4 +18,3 @@ test-results
 .env.*
 *.tfstate
 *.tfstate.*
-

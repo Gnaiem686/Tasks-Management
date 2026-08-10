@@ -9,10 +9,15 @@ from pydantic import BaseModel, ConfigDict, Field
 from workforce_contracts.auth import AuthenticatedPrincipal
 from workforce_persistence.database import Database
 from workforce_persistence.scan_repository import DatabaseScanStore
-from workforce_risk.scans.service import PipelineResult, ScanService
+from workforce_risk.scans.service import ScanService
 
 from agent_api.auth.roles import ApplicationRole
+from agent_api.dependencies import get_evidence_provider, get_scoring_client
 from agent_api.routes.investigations import get_investigator
+from agent_api.scans.pipeline import (
+    DatabaseScanResultSink,
+    EmployeeOverloadScanPipeline,
+)
 
 router = APIRouter(prefix="/api/v1")
 
@@ -23,11 +28,6 @@ class ManualScanRequest(BaseModel):
     window: str = Field(min_length=1, max_length=128)
 
 
-class UnconfiguredPipeline:
-    async def run(self, *, scope: str, correlation_id: str) -> PipelineResult:
-        raise RuntimeError("scan pipeline dependencies are unavailable")
-
-
 def get_scan_service() -> ScanService:
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
@@ -35,10 +35,22 @@ def get_scan_service() -> ScanService:
     environment = cast(
         Literal["dev", "prod", "test"], os.getenv("APP_ENVIRONMENT", "dev")
     )
+    database = Database(database_url)
+    employee_ids = tuple(
+        value.strip()
+        for value in os.getenv("SCAN_EMPLOYEE_IDS", "EMP-002").split(",")
+        if value.strip()
+    )
+    pipeline = EmployeeOverloadScanPipeline(
+        evidence=get_evidence_provider(),
+        scoring=get_scoring_client(),
+        sink=DatabaseScanResultSink(database, environment=environment),
+        employee_ids=employee_ids,
+    )
     return ScanService(
         environment=environment,
-        store=DatabaseScanStore(Database(database_url)),
-        pipeline=UnconfiguredPipeline(),
+        store=DatabaseScanStore(database),
+        pipeline=pipeline,
     )
 
 
