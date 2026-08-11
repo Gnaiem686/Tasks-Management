@@ -33,6 +33,26 @@ def test_dev_deployment_is_guarded_and_serialized() -> None:
     assert workflow["permissions"]["contents"] == "read"
 
 
+def test_dev_deployment_runs_after_reusable_ci_on_dev_pushes() -> None:
+    workflow = _workflow("deploy-dev.yml")
+    assert workflow["on"]["push"]["branches"] == ["dev"]
+    assert workflow["jobs"]["quality"]["uses"] == "./.github/workflows/ci.yml"
+    assert workflow["jobs"]["deploy"]["needs"] == "quality"
+
+
+def test_dev_deployment_persists_promotion_evidence() -> None:
+    text = _text("deploy-dev.yml")
+    assert "artifacts/deployment/image-digests.json" in text
+    assert "artifacts/deployment/release.json" in text
+    assert "dev-release-${{ github.run_id }}" in text
+
+
+def test_dev_ssm_payload_runs_explicitly_under_bash() -> None:
+    text = _text("deploy-dev.yml")
+    assert '"bash -lc " + ($script | @sh)' in text
+    assert '"set -Eeuo pipefail",' not in text
+
+
 def test_dev_deploys_through_checksum_verified_s3_and_ssm() -> None:
     text = _text("deploy-dev.yml")
     assert "aws s3 cp" in text
