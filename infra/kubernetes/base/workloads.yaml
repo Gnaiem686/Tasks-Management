@@ -124,6 +124,8 @@ spec:
           env:
             - {name: AWS_ROLE_ARN, value: WORKFORCE_APPLICATION_ROLE_ARN}
             - {name: AWS_WEB_IDENTITY_TOKEN_FILE, value: /var/run/secrets/aws/token}
+            - {name: WORKFORCE_MCP_HOST, value: 0.0.0.0}
+            - {name: WORKFORCE_MCP_LISTEN_PORT, value: "8001"}
           volumeMounts:
             - {name: aws-web-identity, mountPath: /var/run/secrets/aws, readOnly: true}
           startupProbe: {tcpSocket: {port: mcp}, failureThreshold: 30, periodSeconds: 2}
@@ -154,6 +156,9 @@ spec:
           image: registry.invalid/workforce-risk/devops-mcp@sha256:0000000000000000000000000000000000000000000000000000000000000000
           ports: [{name: mcp, containerPort: 8002}]
           envFrom: [{configMapRef: {name: environment-config}}]
+          env:
+            - {name: DEVOPS_MCP_HOST, value: 0.0.0.0}
+            - {name: DEVOPS_MCP_LISTEN_PORT, value: "8002"}
           startupProbe: {tcpSocket: {port: mcp}, failureThreshold: 30, periodSeconds: 2}
           readinessProbe: {tcpSocket: {port: mcp}, periodSeconds: 5}
           livenessProbe: {tcpSocket: {port: mcp}, periodSeconds: 10}

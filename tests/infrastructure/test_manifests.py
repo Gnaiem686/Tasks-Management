@@ -57,6 +57,26 @@ def test_deployments_have_probes_resources_and_distinct_service_accounts() -> No
     assert len(accounts) == 4
 
 
+def test_mcp_deployments_bind_to_pod_network_with_collision_safe_ports() -> None:
+    docs = _documents(K8S / "base" / "workloads.yaml")
+    deployments = {
+        doc["metadata"]["name"]: doc
+        for doc in docs
+        if doc["kind"] == "Deployment"
+    }
+    expected = {
+        "workforce-risk-mcp": ("WORKFORCE_MCP_HOST", "WORKFORCE_MCP_LISTEN_PORT", "8001"),
+        "devops-mcp": ("DEVOPS_MCP_HOST", "DEVOPS_MCP_LISTEN_PORT", "8002"),
+    }
+    for name, (host_name, port_name, port) in expected.items():
+        env = {
+            item["name"]: item["value"]
+            for item in deployments[name]["spec"]["template"]["spec"]["containers"][0]["env"]
+        }
+        assert env[host_name] == "0.0.0.0"
+        assert env[port_name] == port
+
+
 def test_aws_workloads_use_projected_web_identity_not_static_credentials() -> None:
     manifest = (K8S / "base" / "workloads.yaml").read_text()
     assert "AWS_WEB_IDENTITY_TOKEN_FILE" in manifest

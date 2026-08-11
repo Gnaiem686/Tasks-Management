@@ -65,7 +65,10 @@ from workforce_risk_mcp.tools.scoring import (
 )
 
 HOST = os.getenv("WORKFORCE_MCP_HOST", "127.0.0.1")
-PORT = int(os.getenv("WORKFORCE_MCP_PORT", "8001"))
+PORT = int(
+    os.getenv("WORKFORCE_MCP_LISTEN_PORT")
+    or os.getenv("WORKFORCE_MCP_PORT", "8001")
+)
 ENVIRONMENT = os.getenv("APP_ENVIRONMENT", "dev")
 CONFIG_PATH = Path(os.getenv("SCORING_CONFIG_PATH", "config/scoring/v1.yaml"))
 COMMENT_CONFIG_PATH = Path(os.getenv("COMMENT_PATTERN_PATH", "config/comments/v1.yaml"))

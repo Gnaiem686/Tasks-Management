@@ -15,7 +15,10 @@ from devops_mcp.tools.queues import QueueRequest, inspect_queues
 mcp = FastMCP(
     "Workforce DevOps MCP",
     host=os.getenv("DEVOPS_MCP_HOST", "127.0.0.1"),
-    port=int(os.getenv("DEVOPS_MCP_PORT", "8002")),
+    port=int(
+        os.getenv("DEVOPS_MCP_LISTEN_PORT")
+        or os.getenv("DEVOPS_MCP_PORT", "8002")
+    ),
     streamable_http_path="/mcp",
     stateless_http=True,
     json_response=True,
