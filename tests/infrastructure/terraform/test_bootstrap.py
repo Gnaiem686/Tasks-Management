@@ -59,6 +59,7 @@ def test_shared_foundation_uses_separate_roles_and_immutable_ecr() -> None:
     assert 'for_each = toset(["dev", "prod"])' in text
     assert 'image_tag_mutability = "IMMUTABLE"' in text
     assert "scan_on_push = true" in text
+    assert '"ecr:DescribeImages"' in text
     assert re.search(r"force_delete\s*=\s*false", text)
 
 
