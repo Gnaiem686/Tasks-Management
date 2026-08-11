@@ -21,6 +21,18 @@ def test_explanation_provider_uses_fallback_without_bedrock_configuration(
 def test_explanation_provider_selects_bedrock_when_model_is_configured(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    class Boto3Stub:
+        @staticmethod
+        def client(service_name: str, *, region_name: str) -> object:
+            assert service_name == "bedrock-runtime"
+            assert region_name == "us-east-1"
+            return object()
+
+    def import_module(name: str) -> object:
+        assert name == "boto3"
+        return Boto3Stub()
+
+    monkeypatch.setattr("agent_api.llm.factory.importlib.import_module", import_module)
     monkeypatch.setenv("BEDROCK_MODEL_ID", "test.model-v1")
     monkeypatch.setenv("AWS_REGION", "us-east-1")
     assert isinstance(get_explanation_provider(), BedrockExplanationProvider)

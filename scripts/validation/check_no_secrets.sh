@@ -16,15 +16,34 @@ secret_pattern='(?ix)(
   |-----BEGIN\s+(?:RSA\s+|EC\s+|OPENSSH\s+)?PRIVATE\s+KEY-----
 )'
 
-mapfile -t matching_files < <(
-  rg --files-with-matches --pcre2 --hidden \
-    --glob '!.git/**' \
-    --glob '!.venv/**' \
-    --glob '!.worktrees/**' \
-    --glob '!.env.example' \
-    --glob '!uv.lock' \
-    "$secret_pattern" "$scan_root" || true
-)
+matching_files=()
+if command -v rg >/dev/null 2>&1; then
+  mapfile -t matching_files < <(
+    rg --files-with-matches --pcre2 --hidden \
+      --glob '!.git/**' \
+      --glob '!.venv/**' \
+      --glob '!.worktrees/**' \
+      --glob '!.env.example' \
+      --glob '!uv.lock' \
+      "$secret_pattern" "$scan_root" || true
+  )
+else
+  grep_secret_pattern=$(printf '%s' "$secret_pattern" | tr -d '\n')
+  while IFS= read -r -d '' file; do
+    if grep --quiet --binary-files=without-match --perl-regexp \
+      "$grep_secret_pattern" "$file"; then
+      matching_files+=("$file")
+    fi
+  done < <(
+    find "$scan_root" -type f \
+      -not -path '*/.git/*' \
+      -not -path '*/.venv/*' \
+      -not -path '*/.worktrees/*' \
+      -not -name '.env.example' \
+      -not -name 'uv.lock' \
+      -print0
+  )
+fi
 
 if (( ${#matching_files[@]} > 0 )); then
   for file in "${matching_files[@]}"; do
