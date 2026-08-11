@@ -6,6 +6,7 @@ locals {
   bootstrap = {
     aws_region                 = var.aws_region
     kubernetes_version         = var.kubernetes_version
+    kubernetes_semver          = split("-", var.kubernetes_package_version)[0]
     kubernetes_package_version = var.kubernetes_package_version
     containerd_version         = var.containerd_version
     calico_version             = var.calico_version

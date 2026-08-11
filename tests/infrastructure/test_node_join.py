@@ -77,6 +77,10 @@ def test_versions_are_explicit_and_replacement_is_supported() -> None:
     assert "aws_iam_role_policy.worker_join" in compute
     assert "aws_route_table_association.private" in compute
     assert 'aws_cli_version            = "2.27.41"' in compute
+    assert "kubernetes_semver          = split(\"-\", var.kubernetes_package_version)[0]" in compute
+    control_plane = (TEMPLATES / "control-plane.sh.tftpl").read_text()
+    assert 'kubernetesVersion: "v${kubernetes_semver}"' in control_plane
+    assert 'kubernetesVersion: "v${kubernetes_version}"' not in control_plane
     for template in ("control-plane.sh.tftpl", "worker.sh.tftpl"):
         script = (TEMPLATES / template).read_text()
         assert "awscli-exe-linux-x86_64-${aws_cli_version}.zip" in script
