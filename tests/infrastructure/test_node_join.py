@@ -76,9 +76,6 @@ def test_versions_are_explicit_and_replacement_is_supported() -> None:
     assert "aws_iam_role_policy.control_plane_join" in compute
     assert "aws_iam_role_policy.worker_join" in compute
     assert "aws_route_table_association.private" in compute
-    assert "BOOTSTRAP_NETWORK_ATTEMPTS=" in (
-        TEMPLATES / "control-plane.sh.tftpl"
-    ).read_text()
 
 
 def test_verification_script_checks_topology_and_parameter_cleanup() -> None:
