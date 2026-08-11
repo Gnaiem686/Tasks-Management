@@ -1,0 +1,229 @@
+name: Promote production
+
+on:
+  workflow_dispatch:
+    inputs:
+      dev_run_id:
+        description: Successful deploy-dev workflow run ID
+        required: true
+        type: string
+      confirmation:
+        description: Type PROMOTE to confirm production promotion
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: promote-prod
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    if: vars.DEPLOYMENTS_ENABLED == 'true' && inputs.confirmation == 'PROMOTE'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      CONTROL_PLANE_INSTANCE_ID: ${{ vars.CONTROL_PLANE_INSTANCE_ID }}
+      DEPLOYMENT_BUCKET: ${{ vars.DEPLOYMENT_BUCKET }}
+      PROD_AGENT_API_BASE_URL: ${{ vars.PROD_AGENT_API_BASE_URL }}
+      PROD_REPORT_BUCKET: ${{ vars.PROD_REPORT_BUCKET }}
+      PROD_NOTIFICATION_QUEUE_URL: ${{ vars.PROD_NOTIFICATION_QUEUE_URL }}
+      PROD_APPLICATION_ROLE_ARN: ${{ vars.PROD_APPLICATION_ROLE_ARN }}
+      PROD_EXTERNAL_SECRETS_ROLE_ARN: ${{ vars.PROD_EXTERNAL_SECRETS_ROLE_ARN }}
+      JIRA_MUTATION_ENABLED: "false"
+
+    steps:
+      - name: Check out promotion source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Download successful dev release evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: dev-release-${{ inputs.dev_run_id }}
+          path: artifacts/dev-release
+          run-id: ${{ inputs.dev_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Validate dev release provenance and immutable digests
+        id: evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEV_RUN_ID: ${{ inputs.dev_run_id }}
+        run: |
+          set -Eeuo pipefail
+          release=artifacts/dev-release/deployment/release.json
+          test -s "$release"
+          commit=$(jq -er '.git_commit' "$release")
+          jq -e '
+            .environment == "dev" and
+            .dev_validation == "passed" and
+            (.image_digests | type == "object" and length == 4 and
+              all(.[]; test("@sha256:[a-f0-9]{64}$")))
+          ' "$release" >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$DEV_RUN_ID" \
+            --jq 'select(.name == "Deploy dev" and .head_branch == "dev" and .conclusion == "success") | .head_sha' \
+            | grep -Fx "$commit"
+          git fetch origin main --quiet
+          git merge-base --is-ancestor "$commit" origin/main
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          mkdir -p artifacts/deployment
+          cp "$release" artifacts/deployment/release.json
+          jq -c '.image_digests' "$release" > artifacts/dev-release/image-digests.json
+
+      - name: Check out exact dev-tested commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ steps.evidence.outputs.commit }}
+          clean: false
+
+      - name: Install Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version-file: .python-version
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+        with:
+          version: "0.12.2"
+          enable-cache: true
+
+      - name: Install locked dependencies
+        run: uv sync --all-packages --frozen
+
+      - name: Install pinned release tools
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          tools="$RUNNER_TEMP/workforce-tools"
+          mkdir -p "$tools"
+          curl -fsSLo "$tools/kustomize.tar.gz" \
+            https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.8.1/kustomize_v5.8.1_linux_amd64.tar.gz
+          curl -fsSLo "$tools/kustomize-checksums.txt" \
+            https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.8.1/checksums.txt
+          grep 'kustomize_v5.8.1_linux_amd64.tar.gz' "$tools/kustomize-checksums.txt" \
+            | sed 's#kustomize_v5.8.1_linux_amd64.tar.gz#kustomize.tar.gz#' \
+            | (cd "$tools" && sha256sum -c -)
+          curl -fsSLo "$tools/kubeconform.tar.gz" \
+            https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz
+          curl -fsSLo "$tools/kubeconform-checksums.txt" \
+            https://github.com/yannh/kubeconform/releases/download/v0.7.0/CHECKSUMS
+          grep 'kubeconform-linux-amd64.tar.gz' "$tools/kubeconform-checksums.txt" \
+            | sed 's#kubeconform-linux-amd64.tar.gz#kubeconform.tar.gz#' \
+            | (cd "$tools" && sha256sum -c -)
+          tar -xzf "$tools/kustomize.tar.gz" -C "$tools"
+          tar -xzf "$tools/kubeconform.tar.gz" -C "$tools" kubeconform
+          echo "$tools" >> "$GITHUB_PATH"
+
+      - name: Configure production AWS identity
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4
+        with:
+          role-to-assume: ${{ vars.PROD_AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Render exact immutable production release
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p artifacts/{kubernetes,deployment/release}
+          image_digests=$(cat artifacts/dev-release/image-digests.json)
+          for service in agent-api workforce-risk-mcp devops-mcp notification-worker; do
+            reference=$(jq -er --arg service "$service" '.[$service]' <<<"$image_digests")
+            [[ "$reference" =~ @sha256:[a-f0-9]{64}$ ]]
+            (cd infra/kubernetes/overlays/prod && \
+              kustomize edit set image "registry.invalid/workforce-risk/$service=$reference")
+          done
+          kustomize build infra/kubernetes/overlays/prod > artifacts/kubernetes/prod-rendered.yaml
+          sed -i "s|WORKFORCE_APPLICATION_ROLE_ARN|$PROD_APPLICATION_ROLE_ARN|g" artifacts/kubernetes/prod-rendered.yaml
+          sed -i "s|WORKFORCE_EXTERNAL_SECRETS_ROLE_ARN|$PROD_EXTERNAL_SECRETS_ROLE_ARN|g" artifacts/kubernetes/prod-rendered.yaml
+          sed -i "s|WORKFORCE_REPORT_BUCKET|$PROD_REPORT_BUCKET|g" artifacts/kubernetes/prod-rendered.yaml
+          sed -i "s|WORKFORCE_NOTIFICATION_QUEUE_URL|$PROD_NOTIFICATION_QUEUE_URL|g" artifacts/kubernetes/prod-rendered.yaml
+          ! grep -q 'WORKFORCE_.*_ROLE_ARN' artifacts/kubernetes/prod-rendered.yaml
+          grep -q 'JIRA_MUTATION_ENABLED: "false"' artifacts/kubernetes/prod-rendered.yaml
+          kubeconform -strict -exit-on-error -ignore-missing-schemas artifacts/kubernetes/prod-rendered.yaml
+          uv run python -m scripts.deployment.split_manifests \
+            artifacts/kubernetes/prod-rendered.yaml artifacts/deployment/release
+          cp scripts/deployment/deploy_release.sh artifacts/deployment/release/
+          tar -czf artifacts/deployment/release-bundle.tar.gz -C artifacts/deployment/release .
+          (cd artifacts/deployment && sha256sum release-bundle.tar.gz > release-bundle.sha256)
+
+      - name: Upload checksum-protected production bundle
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          commit=${{ steps.evidence.outputs.commit }}
+          bundle_prefix="releases/prod/$commit"
+          aws s3 cp artifacts/deployment/release-bundle.tar.gz "s3://$DEPLOYMENT_BUCKET/$bundle_prefix/release-bundle.tar.gz"
+          aws s3 cp artifacts/deployment/release-bundle.sha256 "s3://$DEPLOYMENT_BUCKET/$bundle_prefix/release-bundle.sha256"
+          echo "BUNDLE_PREFIX=$bundle_prefix" >> "$GITHUB_ENV"
+
+      - name: Deploy production through private SSM path
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          commit=${{ steps.evidence.outputs.commit }}
+          script=$(cat <<EOF
+          set -Eeuo pipefail
+          install -d -m 0700 /var/lib/workforce-releases/$commit
+          cd /var/lib/workforce-releases/$commit
+          aws s3 cp s3://$DEPLOYMENT_BUCKET/$BUNDLE_PREFIX/release-bundle.tar.gz .
+          aws s3 cp s3://$DEPLOYMENT_BUCKET/$BUNDLE_PREFIX/release-bundle.sha256 .
+          sha256sum -c release-bundle.sha256
+          tar -xzf release-bundle.tar.gz
+          chmod 0700 deploy_release.sh
+          RELEASE_DIRECTORY=\$PWD RELEASE_NAMESPACE=prod ./deploy_release.sh
+          kubectl -n prod rollout status deployment/agent-api --timeout=5m
+          EOF
+          )
+          commands=$(jq -nc --arg script "$script" '{commands:["bash -lc " + ($script | @sh)]}')
+          command_id=$(aws ssm send-command \
+            --instance-ids "$CONTROL_PLANE_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --parameters "$commands" \
+            --query 'Command.CommandId' --output text)
+          aws ssm wait command-executed --command-id "$command_id" --instance-id "$CONTROL_PLANE_INSTANCE_ID"
+          aws ssm get-command-invocation --command-id "$command_id" --instance-id "$CONTROL_PLANE_INSTANCE_ID" \
+            > artifacts/deployment/ssm-result.json
+          jq -e '.Status == "Success"' artifacts/deployment/ssm-result.json
+
+      - name: Run non-destructive production smoke checks
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export JIRA_MUTATION_ENABLED=false
+          test "$JIRA_MUTATION_ENABLED" = false
+          curl --fail --silent --show-error --max-time 15 "$PROD_AGENT_API_BASE_URL/health" \
+            > artifacts/deployment/agent-health.json
+
+      - name: Record production promotion evidence
+        if: always()
+        shell: bash
+        run: |
+          jq -n \
+            --arg dev_run_id "${{ inputs.dev_run_id }}" \
+            --arg git_commit "${{ steps.evidence.outputs.commit }}" \
+            --arg actor "$GITHUB_ACTOR" \
+            --arg status "${{ job.status }}" \
+            '{dev_run_id:$dev_run_id,git_commit:$git_commit,deployment_actor:$actor,status:$status}' \
+            > artifacts/deployment/production-promotion.json
+          echo '## Production promotion' >> "$GITHUB_STEP_SUMMARY"
+          echo "- Dev workflow run: ${{ inputs.dev_run_id }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Exact commit: ${{ steps.evidence.outputs.commit }}" >> "$GITHUB_STEP_SUMMARY"
+          echo '- Images: immutable dev-tested digests; no rebuild' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Retain production deployment evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: production-promotion-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 90
