@@ -183,6 +183,52 @@ def test_ci_blocks_network_without_breaking_asyncio_event_loops() -> None:
     assert "--allow-unix-socket" in text
 
 
+def test_prod_promotion_is_manual_approval_protected_and_serialized() -> None:
+    workflow = _workflow("promote-prod.yml")
+    assert "workflow_dispatch" in workflow["on"]
+    assert workflow["concurrency"]["group"] == "promote-prod"
+    assert workflow["concurrency"]["cancel-in-progress"] == "false"
+    assert workflow["jobs"]["promote"]["environment"] == "production"
+    assert workflow["jobs"]["promote"]["timeout-minutes"] == "30"
+
+
+def test_prod_promotes_exact_dev_evidence_without_rebuilding() -> None:
+    text = _text("promote-prod.yml")
+    assert "dev-release-${{ inputs.dev_run_id }}" in text
+    assert "artifacts/deployment/release.json" in text
+    assert "image_digests" in text
+    assert "@sha256:" in text
+    assert "kustomize edit set image" in text
+    assert "docker build" not in text
+    assert "docker push" not in text
+    assert ":latest" not in text
+    assert "uv sync --all-packages --frozen" in text
+    assert "uv run python -m scripts.deployment.split_manifests" in text
+
+
+def test_prod_deploys_with_bash_and_only_non_destructive_verification() -> None:
+    text = _text("promote-prod.yml")
+    assert "AWS-RunShellScript" in text
+    assert '"bash -lc " + ($script | @sh)' in text
+    assert "RELEASE_NAMESPACE=prod" in text
+    assert "rollout status" in text
+    assert "alembic downgrade" not in text
+    assert "kubectl delete namespace" not in text
+    assert "JIRA_MUTATION_ENABLED=false" in text
+
+
+def test_terraform_grants_environment_scoped_release_permissions() -> None:
+    text = (ROOT / "infra" / "terraform" / "environment" / "deployment.tf").read_text()
+    assert 'for_each = toset(["dev", "prod"])' in text
+    assert '"releases/${each.key}/*"' in text
+    assert 'resource "aws_iam_role_policy" "github_deploy"' in text
+
+
+def test_production_oidc_trust_matches_protected_environment_name() -> None:
+    text = (ROOT / "infra" / "terraform" / "shared" / "main.tf").read_text()
+    assert 'each.key == "prod" ? "production" : each.key' in text
+
+
 def test_terraform_plan_and_apply_are_separate_and_serialized() -> None:
     plan = _text("terraform-plan.yml")
     apply = _text("terraform-apply.yml")

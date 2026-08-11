@@ -44,23 +44,26 @@ resource "aws_s3_bucket_lifecycle_configuration" "deployment_artifacts" {
   }
 }
 
-data "aws_iam_role" "github_dev_deploy" {
-  name = "${var.project_name}-github-dev"
+data "aws_iam_role" "github_deploy" {
+  for_each = toset(["dev", "prod"])
+  name     = "${var.project_name}-github-${each.key}"
 }
 
-data "aws_iam_policy_document" "github_dev_deploy" {
+data "aws_iam_policy_document" "github_deploy" {
+  for_each = toset(["dev", "prod"])
+
   statement {
     actions   = ["s3:ListBucket"]
     resources = [aws_s3_bucket.deployment_artifacts.arn]
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
-      values   = ["releases/dev/*"]
+      values   = ["releases/${each.key}/*"]
     }
   }
   statement {
     actions   = ["s3:GetObject", "s3:PutObject"]
-    resources = ["${aws_s3_bucket.deployment_artifacts.arn}/releases/dev/*"]
+    resources = ["${aws_s3_bucket.deployment_artifacts.arn}/releases/${each.key}/*"]
   }
   statement {
     actions   = ["kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey"]
@@ -79,10 +82,11 @@ data "aws_iam_policy_document" "github_dev_deploy" {
   }
 }
 
-resource "aws_iam_role_policy" "github_dev_deploy" {
-  name   = "private-kubeadm-dev-deploy"
-  role   = data.aws_iam_role.github_dev_deploy.id
-  policy = data.aws_iam_policy_document.github_dev_deploy.json
+resource "aws_iam_role_policy" "github_deploy" {
+  for_each = toset(["dev", "prod"])
+  name     = "private-kubeadm-${each.key}-deploy"
+  role     = data.aws_iam_role.github_deploy[each.key].id
+  policy   = data.aws_iam_policy_document.github_deploy[each.key].json
 }
 
 data "aws_iam_policy_document" "control_plane_release_bundle" {
