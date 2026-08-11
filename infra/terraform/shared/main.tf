@@ -70,7 +70,7 @@ data "aws_iam_policy_document" "github_environment_trust" {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
       values = [
-        "repo:${var.github_repository}:environment:${each.key == "prod" ? "production" : each.key}"
+        "repo:${var.github_repository_subject}:environment:${each.key == "prod" ? "production" : each.key}"
       ]
     }
   }
