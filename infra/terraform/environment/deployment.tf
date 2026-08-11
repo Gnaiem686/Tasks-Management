@@ -49,6 +49,17 @@ data "aws_iam_role" "github_deploy" {
   name     = "${var.project_name}-github-${each.key}"
 }
 
+data "aws_instances" "deployment_control_plane" {
+  filter {
+    name   = "tag:Name"
+    values = ["${var.project_name}-shared-control-plane"]
+  }
+  filter {
+    name   = "instance-state-name"
+    values = ["running"]
+  }
+}
+
 data "aws_iam_policy_document" "github_deploy" {
   for_each = toset(["dev", "prod"])
 
@@ -71,10 +82,13 @@ data "aws_iam_policy_document" "github_deploy" {
   }
   statement {
     actions = ["ssm:SendCommand"]
-    resources = [
-      aws_instance.control_plane.arn,
-      "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript",
-    ]
+    resources = concat(
+      ["arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript"],
+      formatlist(
+        "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/%s",
+        data.aws_instances.deployment_control_plane.ids,
+      ),
+    )
   }
   statement {
     actions   = ["ssm:GetCommandInvocation", "ssm:ListCommandInvocations"]

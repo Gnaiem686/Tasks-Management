@@ -74,7 +74,7 @@ def test_github_environment_deploy_roles_use_checksum_bundle_and_ssm_only() -> N
     assert "block_public_access" not in deployment
     assert "aws_s3_bucket_public_access_block" in deployment
     assert "ssm:SendCommand" in deployment
-    assert "aws_instance.control_plane.arn" in deployment
+    assert "data.aws_instances.deployment_control_plane.ids" in deployment
     assert "document/AWS-RunShellScript" in deployment
     assert 'data "aws_iam_role" "github_deploy"' in deployment
     assert 'for_each = toset(["dev", "prod"])' in deployment
@@ -91,6 +91,15 @@ def test_github_deploy_smoke_permissions_are_read_only_and_environment_scoped() 
     assert "aws_sqs_queue.notifications[each.key].arn" in deployment
     assert 'actions   = ["s3:PutObject"]' not in deployment
     assert 'actions   = ["sqs:SendMessage"]' not in deployment
+
+
+def test_deploy_policy_resolves_running_control_plane_independently() -> None:
+    deployment = (TF_ROOT / "deployment.tf").read_text()
+    assert 'data "aws_instances" "deployment_control_plane"' in deployment
+    assert 'values = ["${var.project_name}-shared-control-plane"]' in deployment
+    assert 'values = ["running"]' in deployment
+    assert "data.aws_instances.deployment_control_plane.ids" in deployment
+    assert "aws_instance.control_plane.arn" not in deployment
 
 
 def test_worker_nodes_can_pull_images_from_project_ecr_repositories() -> None:
