@@ -46,6 +46,8 @@ class BedrockExplanationProvider:
         self._opened_at: float | None = None
 
     async def explain(self, request: ExplanationRequest) -> ExplanationResponse:
+        if request.risk.score is None or request.risk.level is None:
+            return await self._fallback.explain(request)
         if self._circuit_is_open():
             return await self._fallback.explain(request)
         payload = build_model_payload(request)
