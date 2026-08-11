@@ -115,12 +115,12 @@ jobs:
           set -Eeuo pipefail
           image_digests='{}'
           for service in agent-api workforce-risk-mcp devops-mcp notification-worker; do
-            repository="$ECR_REGISTRY/workforce-risk-$service"
+            repository="$ECR_REGISTRY/workforce-risk/$service"
             docker build --file "services/$service/Dockerfile" --tag "$repository:$GITHUB_SHA" .
             docker push "$repository:$GITHUB_SHA"
             docker inspect "$repository:$GITHUB_SHA" >/dev/null
             digest=$(aws ecr describe-images \
-              --repository-name "workforce-risk-$service" \
+              --repository-name "workforce-risk/$service" \
               --image-ids "imageTag=$GITHUB_SHA" \
               --query 'imageDetails[0].imageDigest' --output text)
             [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]

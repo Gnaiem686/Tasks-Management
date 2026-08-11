@@ -245,7 +245,7 @@ spec:
           containers:
             - name: scan
               image: registry.invalid/workforce-risk/agent-api@sha256:0000000000000000000000000000000000000000000000000000000000000000
-              command: [python, -m, workforce_agent.scheduled_scan]
+              command: [python, -m, agent_api.scheduled_scan]
               envFrom:
                 - configMapRef: {name: environment-config}
                 - secretRef: {name: application-secrets}

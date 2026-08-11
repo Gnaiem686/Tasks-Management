@@ -52,6 +52,8 @@ def test_dev_build_promotes_only_resolved_image_digests() -> None:
     assert "kustomize edit set image" in text
     assert "kubectl set image" not in text
     assert ":latest" not in text
+    assert 'repository="$ECR_REGISTRY/workforce-risk/$service"' in text
+    assert '--repository-name "workforce-risk/$service"' in text
 
 
 def test_dev_release_stops_on_migration_and_rollout_failure() -> None:

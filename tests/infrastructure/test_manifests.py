@@ -56,6 +56,17 @@ def test_scan_cronjob_is_non_overlapping_and_bounded() -> None:
     assert cronjob["spec"]["successfulJobsHistoryLimit"] >= 1
     assert cronjob["spec"]["failedJobsHistoryLimit"] >= 1
     assert cronjob["spec"]["jobTemplate"]["spec"]["activeDeadlineSeconds"] > 0
+    command = cronjob["spec"]["jobTemplate"]["spec"]["template"]["spec"][
+        "containers"
+    ][0]["command"]
+    assert command == ["python", "-m", "agent_api.scheduled_scan"]
+
+
+def test_environment_overlays_use_terraform_secret_names() -> None:
+    for environment in ("dev", "prod"):
+        rendered = (K8S / "overlays" / environment / "secret-paths.yaml").read_text()
+        for secret in ("database", "jira-mcp", "api-key-pepper", "initial-api-key"):
+            assert f"workforce-risk/{environment}/{secret}" in rendered
 
 
 def test_overlays_are_isolated_and_use_separate_jira_scopes() -> None:
