@@ -143,6 +143,13 @@ def test_workflow_publishes_summaries_and_retains_artifacts() -> None:
     assert "if: always()" in text
 
 
+def test_ci_retains_coverage_when_codecov_is_not_onboarded() -> None:
+    text = _text("ci.yml")
+    assert "--cov-report=xml:artifacts/tests/coverage.xml" in text
+    assert "fail_ci_if_error: false" in text
+    assert "artifacts/tests/coverage.xml" in text
+
+
 def test_ci_blocks_network_without_breaking_asyncio_event_loops() -> None:
     text = _text("ci.yml")
     assert "--disable-socket" in text
