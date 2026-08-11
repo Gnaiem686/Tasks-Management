@@ -50,6 +50,13 @@ def test_dev_deployment_persists_promotion_evidence() -> None:
     assert "dev-release-${{ github.run_id }}" in text
 
 
+def test_dev_scan_records_all_and_blocks_fixable_critical_findings() -> None:
+    text = _text("deploy-dev.yml")
+    assert "--exit-code 0 --severity CRITICAL --format json" in text
+    assert "--exit-code 1 --severity CRITICAL --ignore-unfixed" in text
+    assert "artifacts/security/$service-trivy.json" in text
+
+
 def test_dev_ssm_payload_runs_explicitly_under_bash() -> None:
     text = _text("deploy-dev.yml")
     assert '"bash -lc " + ($script | @sh)' in text
