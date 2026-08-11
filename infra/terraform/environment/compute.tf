@@ -43,6 +43,7 @@ resource "aws_instance" "control_plane" {
   depends_on = [
     aws_iam_role_policy.control_plane_join,
     aws_iam_role_policy_attachment.control_plane_ssm_core,
+    aws_route_table_association.private,
     aws_s3_bucket_policy.cluster_oidc_public_keys,
   ]
 }

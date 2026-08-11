@@ -8,6 +8,17 @@ if test -f /etc/kubernetes/admin.conf; then
 fi
 
 export DEBIAN_FRONTEND=noninteractive
+BOOTSTRAP_NETWORK_ATTEMPTS=30
+for attempt in $(seq 1 "$BOOTSTRAP_NETWORK_ATTEMPTS"); do
+  if timeout 5 bash -c '</dev/tcp/pkgs.k8s.io/443' 2>/dev/null; then
+    break
+  fi
+  if [[ "$attempt" == "$BOOTSTRAP_NETWORK_ATTEMPTS" ]]; then
+    echo "Bootstrap network did not become ready after bounded retries" >&2
+    exit 1
+  fi
+  sleep $((attempt < 10 ? attempt : 10))
+done
 swapoff -a
 sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
 cat >/etc/modules-load.d/kubernetes.conf <<'MODULES'
