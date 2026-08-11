@@ -20,12 +20,15 @@ from scripts.jira.cli import (  # noqa: E402
 )
 from scripts.jira.mcp_scenario import RovoScenarioVerifier  # noqa: E402
 from scripts.jira.runner import ScenarioCoordinator  # noqa: E402
+from scripts.jira.scenario import scenario_at_step  # noqa: E402
 
 
 def main() -> None:
-    args = parser("Verify the guarded WRD scenario").parse_args()
+    args = parser("Verify the guarded WRD scenario", optional_step=True).parse_args()
     if args.live_mcp:
         scenario = load_scenario(args.scenario)
+        if args.step is not None:
+            scenario = scenario_at_step(scenario, args.step)
         url, cloud_id, authorization = mcp_settings()
         transport = StreamableHttpJiraMcpTransport(
             url=url,
@@ -45,6 +48,8 @@ def main() -> None:
             raise SystemExit(1)
         return
     scenario, store = load(args)
+    if args.step is not None:
+        scenario = scenario_at_step(scenario, args.step)
     offline_result = ScenarioCoordinator(store).verify(scenario)
     emit(offline_result)
     if not offline_result.valid:

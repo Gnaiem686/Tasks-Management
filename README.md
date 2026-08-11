@@ -38,6 +38,25 @@ Open `http://127.0.0.1:8000`. Stop the stack without deleting PostgreSQL data
 with `docker compose down`; add `--volumes` only when intentionally resetting
 the local database.
 
+## Automatic Jira demo
+
+After exporting `ATLASSIAN_MCP_AUTHORIZATION`, `DEV_MANAGER_API_KEY`, and the
+AWS `AGENT_DEV_URL`, run the deterministic laptop simulation:
+
+```bash
+bash scripts/demo/auto_demo.sh
+```
+
+The default delay is 60 seconds per simulated day. For a quick rehearsal:
+
+```bash
+DEMO_STAGE_SECONDS=5 bash scripts/demo/auto_demo.sh
+```
+
+Refresh Jira and the manager UI after each printed stage. Stop safely with
+`Ctrl+C`; Jira retains the last completed stage. Restore the deterministic
+starting point with `bash scripts/demo/reset.sh`.
+
 ## Validation status
 
 The stakeholder authorized Phase 1 to begin under the documented Phase 0

@@ -40,6 +40,11 @@ def test_fixture_defines_complete_seven_employee_team() -> None:
     )
     assert {step.name for step in scenario.steps} == {
         "balanced",
+        "stalled",
+        "blocked",
+        "critical",
+        "intervention",
+        "recovery",
         "overload_and_blocker",
         "weak_fit",
         "paired_fit",
@@ -49,6 +54,39 @@ def test_fixture_defines_complete_seven_employee_team() -> None:
         "primary_demo",
         "backup_demo",
     }
+
+
+def test_verify_command_accepts_explicit_advanced_stage(tmp_path: Path) -> None:
+    state = tmp_path / "scenario-state.json"
+    common = ["--scenario", str(FIXTURE), "--state-file", str(state)]
+    subprocess.run(
+        [sys.executable, "scripts/jira/seed_dev.py", *common], check=True
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/jira/advance_scenario.py",
+            *common,
+            "--step",
+            "primary_demo",
+        ],
+        check=True,
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/jira/verify_seed.py",
+            *common,
+            "--step",
+            "primary_demo",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert '"valid": true' in result.stdout
 
 
 def test_seed_and_scenario_advance_are_idempotent() -> None:
