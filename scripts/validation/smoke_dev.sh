@@ -28,7 +28,8 @@ wait_for_scan() {
   local scan_id=$1
   local state=""
   for _attempt in {1..30}; do
-    state=$(authorized_curl "$AGENT_API_BASE_URL/api/v1/scans/$scan_id" \
+    state=$(authorized_curl \
+      "$AGENT_API_BASE_URL/api/v1/scans/$scan_id?project_key=WRD" \
       | jq -er '.state')
     case "$state" in
       completed|completed_degraded) return 0 ;;
