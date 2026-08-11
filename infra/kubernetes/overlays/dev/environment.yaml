@@ -5,10 +5,13 @@ metadata:
   namespace: dev
 data:
   APP_ENVIRONMENT: dev
+  AWS_REGION: us-east-1
+  BEDROCK_MODEL_ID: amazon.nova-lite-v1:0
+  EVIDENCE_MODE: fixture
   JIRA_PROJECT_KEY: WRD
   JIRA_MUTATION_ENABLED: "true"
-  REPORT_BUCKET: workforce-risk-dev-reports
-  NOTIFICATION_QUEUE: workforce-risk-dev-notifications
+  REPORT_BUCKET: WORKFORCE_REPORT_BUCKET
+  NOTIFICATION_QUEUE: WORKFORCE_NOTIFICATION_QUEUE_URL
   DAILY_SCAN_SCHEDULE: "0 6 * * *"
 ---
 apiVersion: external-secrets.io/v1

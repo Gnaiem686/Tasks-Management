@@ -38,6 +38,13 @@ def test_agent_image_packages_the_tested_ui_assets() -> None:
     assert "scripts/validation/verify_ui_assets.py" in text
 
 
+def test_workforce_mcp_image_packages_database_migrations() -> None:
+    text = dockerfile("workforce-risk-mcp")
+
+    assert "packages/persistence/alembic.ini" in text
+    assert "packages/persistence/migrations" in text
+
+
 def test_compose_runs_complete_local_stack_with_safe_runtime_boundaries() -> None:
     compose = yaml.safe_load((ROOT / "compose.yaml").read_text())
     services = compose["services"]

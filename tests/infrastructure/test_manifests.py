@@ -33,6 +33,15 @@ def test_base_has_required_workloads_and_foundations() -> None:
     } <= kinds
 
 
+def test_migration_bootstraps_only_the_scoped_initial_manager_digest() -> None:
+    docs = _documents(K8S / "base" / "workloads.yaml")
+    migration = next(doc for doc in docs if doc["kind"] == "Job")
+    command = migration["spec"]["template"]["spec"]["containers"][0]["command"]
+
+    assert "alembic upgrade head" in " ".join(command)
+    assert "workforce_persistence.bootstrap" in " ".join(command)
+
+
 def test_deployments_have_probes_resources_and_distinct_service_accounts() -> None:
     docs = _documents(K8S / "base" / "workloads.yaml")
     deployments = [doc for doc in docs if doc["kind"] == "Deployment"]
@@ -94,6 +103,29 @@ def test_overlays_are_isolated_and_use_separate_jira_scopes() -> None:
         dev_config["data"]["NOTIFICATION_QUEUE"]
         != prod_config["data"]["NOTIFICATION_QUEUE"]
     )
+
+
+def test_dev_ingress_accepts_the_aws_load_balancer_hostname() -> None:
+    dev_kustomization = (K8S / "overlays" / "dev" / "kustomization.yaml").read_text()
+    dev_ingress_patch = (K8S / "overlays" / "dev" / "ingress-patch.yaml").read_text()
+    prod_ingress_patch = (K8S / "overlays" / "prod" / "ingress-patch.yaml").read_text()
+
+    assert "op: remove" in dev_ingress_patch
+    assert "/spec/rules/0/host" in dev_ingress_patch
+    assert "target:" in dev_kustomization
+    assert "host:" in prod_ingress_patch
+
+
+def test_dev_runtime_uses_release_supplied_aws_resources_and_bedrock() -> None:
+    dev_environment = (K8S / "overlays" / "dev" / "environment.yaml").read_text()
+    workflow = (ROOT / ".github" / "workflows" / "deploy-dev.yml").read_text()
+
+    assert "WORKFORCE_REPORT_BUCKET" in dev_environment
+    assert "WORKFORCE_NOTIFICATION_QUEUE_URL" in dev_environment
+    assert "BEDROCK_MODEL_ID: amazon.nova-lite-v1:0" in dev_environment
+    assert "EVIDENCE_MODE: fixture" in dev_environment
+    assert "WORKFORCE_REPORT_BUCKET" in workflow
+    assert "WORKFORCE_NOTIFICATION_QUEUE_URL" in workflow
 
 
 def test_production_has_provisional_measured_hpa_contract() -> None:

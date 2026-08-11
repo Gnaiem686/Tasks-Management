@@ -7,4 +7,7 @@ resources:
   - environment.yaml
 patches:
   - path: ingress-patch.yaml
+    target:
+      kind: Ingress
+      name: agent-api
   - path: secret-paths.yaml

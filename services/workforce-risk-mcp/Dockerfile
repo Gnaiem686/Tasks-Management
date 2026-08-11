@@ -20,6 +20,8 @@ ENV PATH=/opt/venv/bin:$PATH PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 COPY config config
+COPY packages/persistence/alembic.ini /app/alembic.ini
+COPY packages/persistence/migrations /app/migrations
 USER 10001:10001
 EXPOSE 8001
 STOPSIGNAL SIGTERM

@@ -250,8 +250,13 @@ spec:
       containers:
         - name: migration
           image: registry.invalid/workforce-risk/workforce-risk-mcp@sha256:0000000000000000000000000000000000000000000000000000000000000000
-          command: [alembic, upgrade, head]
-          envFrom: [{secretRef: {name: application-secrets}}]
+          command:
+            - sh
+            - -c
+            - alembic upgrade head && python -m workforce_persistence.bootstrap
+          envFrom:
+            - configMapRef: {name: environment-config}
+            - secretRef: {name: application-secrets}
           env:
             - {name: AWS_ROLE_ARN, value: WORKFORCE_APPLICATION_ROLE_ARN}
             - {name: AWS_WEB_IDENTITY_TOKEN_FILE, value: /var/run/secrets/aws/token}

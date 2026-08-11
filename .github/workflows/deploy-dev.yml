@@ -159,6 +159,10 @@ jobs:
             artifacts/kubernetes/dev-rendered.yaml
           sed -i "s|WORKFORCE_EXTERNAL_SECRETS_ROLE_ARN|$DEV_EXTERNAL_SECRETS_ROLE_ARN|g" \
             artifacts/kubernetes/dev-rendered.yaml
+          sed -i "s|WORKFORCE_REPORT_BUCKET|$DEV_REPORT_BUCKET|g" \
+            artifacts/kubernetes/dev-rendered.yaml
+          sed -i "s|WORKFORCE_NOTIFICATION_QUEUE_URL|$DEV_NOTIFICATION_QUEUE_URL|g" \
+            artifacts/kubernetes/dev-rendered.yaml
           if grep -q 'WORKFORCE_.*_ROLE_ARN' artifacts/kubernetes/dev-rendered.yaml; then
             echo 'Unresolved workload role placeholder' >&2
             exit 1
