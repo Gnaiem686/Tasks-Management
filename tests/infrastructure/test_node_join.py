@@ -65,6 +65,22 @@ def test_worker_join_is_idempotent_bounded_and_observable() -> None:
     assert "exit 1" in script
 
 
+def test_workers_install_checksum_verified_ecr_credential_provider() -> None:
+    compute = (TF_ROOT / "compute.tf").read_text()
+    script = (TEMPLATES / "worker.sh.tftpl").read_text()
+
+    assert 'ecr_credential_provider_version = "v1.34.3-5-gf32b6d4"' in compute
+    assert "ecr_credential_provider_sha256" in compute
+    assert "1a4cb0f628b5e76d468c00cd5507c86cd324731bf379442ad82db5a743bb648d" in compute
+    assert "k8s-staging-provider-aws/releases/${ecr_credential_provider_version}" in script
+    assert "${ecr_credential_provider_sha256}" in script
+    assert "sha256sum -c -" in script
+    assert "CredentialProviderConfig" in script
+    assert "credentialprovider.kubelet.k8s.io/v1" in script
+    assert "--image-credential-provider-config" in script
+    assert "--image-credential-provider-bin-dir" in script
+
+
 def test_versions_are_explicit_and_replacement_is_supported() -> None:
     variables = (TF_ROOT / "variables.tf").read_text()
     compute = (TF_ROOT / "compute.tf").read_text()
@@ -76,8 +92,10 @@ def test_versions_are_explicit_and_replacement_is_supported() -> None:
     assert "aws_iam_role_policy.control_plane_join" in compute
     assert "aws_iam_role_policy.worker_join" in compute
     assert "aws_route_table_association.private" in compute
-    assert 'aws_cli_version            = "2.27.41"' in compute
-    assert "kubernetes_semver          = split(\"-\", var.kubernetes_package_version)[0]" in compute
+    assert "aws_cli_version" in compute
+    assert '"2.27.41"' in compute
+    assert "kubernetes_semver" in compute
+    assert 'split("-", var.kubernetes_package_version)[0]' in compute
     control_plane = (TEMPLATES / "control-plane.sh.tftpl").read_text()
     assert 'kubernetesVersion: "v${kubernetes_semver}"' in control_plane
     assert 'kubernetesVersion: "v${kubernetes_version}"' not in control_plane

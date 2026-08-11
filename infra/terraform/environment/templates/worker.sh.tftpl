@@ -33,6 +33,29 @@ if ! aws --version 2>&1 | grep -q "aws-cli/${aws_cli_version}"; then
   unzip -qo /tmp/awscliv2.zip -d /var/tmp/workforce-aws-cli-install
   /var/tmp/workforce-aws-cli-install/aws/install --update
 fi
+
+install -m 0755 -d /opt/kubelet-credential-providers
+curl -fsSLo /opt/kubelet-credential-providers/ecr-credential-provider \
+  "https://storage.googleapis.com/k8s-staging-provider-aws/releases/${ecr_credential_provider_version}/linux/amd64/ecr-credential-provider-linux-amd64"
+echo "${ecr_credential_provider_sha256}  /opt/kubelet-credential-providers/ecr-credential-provider" \
+  | sha256sum -c -
+chmod 0755 /opt/kubelet-credential-providers/ecr-credential-provider
+cat >/var/lib/kubelet/credential-provider-config.yaml <<'CREDENTIAL_PROVIDER'
+apiVersion: kubelet.config.k8s.io/v1
+kind: CredentialProviderConfig
+providers:
+  - name: ecr-credential-provider
+    matchImages:
+      - "*.dkr.ecr.*.amazonaws.com"
+      - "*.dkr.ecr.*.amazonaws.com.cn"
+      - "*.dkr.ecr-fips.*.amazonaws.com"
+    defaultCacheDuration: "12h"
+    apiVersion: credentialprovider.kubelet.k8s.io/v1
+CREDENTIAL_PROVIDER
+cat >/etc/default/kubelet <<'KUBELET_ARGS'
+KUBELET_EXTRA_ARGS=--image-credential-provider-config=/var/lib/kubelet/credential-provider-config.yaml --image-credential-provider-bin-dir=/opt/kubelet-credential-providers
+KUBELET_ARGS
+
 apt-get install -y "containerd=${containerd_version}"
 mkdir -p /etc/containerd
 containerd config default >/etc/containerd/config.toml

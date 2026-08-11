@@ -4,19 +4,21 @@ data "aws_ssm_parameter" "ubuntu_ami" {
 
 locals {
   bootstrap = {
-    aws_region                 = var.aws_region
-    kubernetes_version         = var.kubernetes_version
-    kubernetes_semver          = split("-", var.kubernetes_package_version)[0]
-    kubernetes_package_version = var.kubernetes_package_version
-    containerd_version         = var.containerd_version
-    calico_version             = var.calico_version
-    join_parameter_name        = aws_ssm_parameter.kubeadm_join.name
-    join_token_ttl             = var.join_token_ttl
-    oidc_bucket                = aws_s3_bucket.cluster_oidc.id
-    oidc_issuer                = local.cluster_oidc_issuer
-    oidc_jwks_uri              = "${local.cluster_oidc_issuer}/openid/v1/jwks"
-    aws_cli_version            = "2.27.41"
-    aws_cli_sha256             = "15daae6cc803984064e3d4be9cfd07c4ae8ea703633c0a0b67acc6e321f706a3"
+    aws_region                      = var.aws_region
+    kubernetes_version              = var.kubernetes_version
+    kubernetes_semver               = split("-", var.kubernetes_package_version)[0]
+    kubernetes_package_version      = var.kubernetes_package_version
+    containerd_version              = var.containerd_version
+    calico_version                  = var.calico_version
+    join_parameter_name             = aws_ssm_parameter.kubeadm_join.name
+    join_token_ttl                  = var.join_token_ttl
+    oidc_bucket                     = aws_s3_bucket.cluster_oidc.id
+    oidc_issuer                     = local.cluster_oidc_issuer
+    oidc_jwks_uri                   = "${local.cluster_oidc_issuer}/openid/v1/jwks"
+    aws_cli_version                 = "2.27.41"
+    aws_cli_sha256                  = "15daae6cc803984064e3d4be9cfd07c4ae8ea703633c0a0b67acc6e321f706a3"
+    ecr_credential_provider_version = "v1.34.3-5-gf32b6d4"
+    ecr_credential_provider_sha256  = "1a4cb0f628b5e76d468c00cd5507c86cd324731bf379442ad82db5a743bb648d"
   }
 }
 

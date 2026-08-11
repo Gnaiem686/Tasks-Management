@@ -8,13 +8,16 @@ from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
+from workforce_persistence.alembic_config import escape_config_interpolation
 from workforce_persistence.models import Base
 
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 if database_url := os.getenv("DATABASE_URL"):
-    config.set_main_option("sqlalchemy.url", database_url)
+    config.set_main_option(
+        "sqlalchemy.url", escape_config_interpolation(database_url)
+    )
 target_metadata = Base.metadata
 
 
