@@ -128,6 +128,27 @@ def test_dev_runtime_uses_release_supplied_aws_resources_and_bedrock() -> None:
     assert "WORKFORCE_NOTIFICATION_QUEUE_URL" in workflow
 
 
+def test_application_network_policy_allows_private_postgres_only() -> None:
+    docs = _documents(K8S / "base" / "workloads.yaml")
+    policy = next(
+        doc
+        for doc in docs
+        if doc["kind"] == "NetworkPolicy"
+        and doc["metadata"]["name"] == "allow-application"
+    )
+    egress = policy["spec"]["egress"]
+
+    postgres_rules = [
+        rule
+        for rule in egress
+        if {"protocol": "TCP", "port": 5432} in rule.get("ports", [])
+    ]
+    assert postgres_rules == [{
+        "to": [{"ipBlock": {"cidr": "10.40.0.0/16"}}],
+        "ports": [{"protocol": "TCP", "port": 5432}],
+    }]
+
+
 def test_production_has_provisional_measured_hpa_contract() -> None:
     docs = _documents(K8S / "overlays" / "prod" / "environment.yaml")
     hpa = next(doc for doc in docs if doc["kind"] == "HorizontalPodAutoscaler")

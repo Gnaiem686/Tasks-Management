@@ -67,6 +67,29 @@ resource "aws_iam_role_policy" "worker_join" {
   policy = data.aws_iam_policy_document.worker_join.json
 }
 
+data "aws_iam_policy_document" "worker_ecr_pull" {
+  statement {
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  statement {
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:BatchGetImage",
+      "ecr:GetDownloadUrlForLayer",
+    ]
+    resources = [
+      "arn:aws:ecr:${var.aws_region}:${data.aws_caller_identity.current.account_id}:repository/workforce-risk/*",
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "worker_ecr_pull" {
+  role   = aws_iam_role.worker.id
+  policy = data.aws_iam_policy_document.worker_ecr_pull.json
+}
+
 resource "aws_iam_instance_profile" "control_plane" {
   name = "${var.project_name}-${var.environment}-control-plane"
   role = aws_iam_role.control_plane.name

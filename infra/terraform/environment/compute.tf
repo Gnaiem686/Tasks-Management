@@ -78,6 +78,7 @@ resource "aws_instance" "worker" {
 
   depends_on = [
     aws_instance.control_plane,
+    aws_iam_role_policy.worker_ecr_pull,
     aws_iam_role_policy.worker_join,
     aws_iam_role_policy_attachment.worker_ssm_core,
   ]

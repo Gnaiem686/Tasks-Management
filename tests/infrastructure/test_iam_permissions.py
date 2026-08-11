@@ -80,3 +80,17 @@ def test_github_dev_deploy_role_uses_checksum_bundle_and_ssm_only() -> None:
     assert "aws_iam_role.control_plane.id" in deployment
     assert '"s3:GetObject"' in deployment
     assert '"kms:Decrypt"' in deployment
+
+
+def test_worker_nodes_can_pull_images_from_project_ecr_repositories() -> None:
+    iam = (TF_ROOT / "iam.tf").read_text()
+    terraform = _terraform()
+
+    assert 'data "aws_caller_identity" "current"' in terraform
+    assert 'data "aws_iam_policy_document" "worker_ecr_pull"' in iam
+    assert '"ecr:GetAuthorizationToken"' in iam
+    assert '"ecr:BatchCheckLayerAvailability"' in iam
+    assert '"ecr:BatchGetImage"' in iam
+    assert '"ecr:GetDownloadUrlForLayer"' in iam
+    assert 'repository/workforce-risk/' in iam
+    assert 'resource "aws_iam_role_policy" "worker_ecr_pull"' in iam
