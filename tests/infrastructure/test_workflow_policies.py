@@ -73,6 +73,21 @@ def test_dev_release_stops_on_migration_and_rollout_failure() -> None:
     assert "database rollback" not in release_path.lower()
 
 
+def test_dev_release_bootstraps_namespace_before_server_side_validation() -> None:
+    deploy_script = (ROOT / "scripts" / "deployment" / "deploy_release.sh").read_text()
+    namespace_bootstrap = 'kubectl create namespace "$RELEASE_NAMESPACE"'
+    foundation_validation = (
+        'kubectl apply --server-side --dry-run=server '
+        '-f "$RELEASE_DIRECTORY/foundation.yaml"'
+    )
+
+    assert namespace_bootstrap in deploy_script
+    assert "--dry-run=client -o yaml" in deploy_script
+    assert deploy_script.index(namespace_bootstrap) < deploy_script.index(
+        foundation_validation
+    )
+
+
 def test_dev_smoke_and_release_record_cover_required_evidence() -> None:
     smoke = (ROOT / "scripts" / "validation" / "smoke_dev.sh").read_text()
     release = (ROOT / "scripts" / "validation" / "record_release.sh").read_text()

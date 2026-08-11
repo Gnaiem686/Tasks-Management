@@ -5,6 +5,9 @@ set -Eeuo pipefail
 : "${RELEASE_NAMESPACE:?Set RELEASE_NAMESPACE}"
 export KUBECONFIG=/etc/kubernetes/admin.conf
 
+kubectl create namespace "$RELEASE_NAMESPACE" --dry-run=client -o yaml \
+  | kubectl apply --server-side -f -
+
 kubectl apply --server-side --dry-run=server -f "$RELEASE_DIRECTORY/foundation.yaml"
 kubectl apply --server-side --dry-run=server -f "$RELEASE_DIRECTORY/migration.yaml"
 kubectl apply --server-side --dry-run=server -f "$RELEASE_DIRECTORY/application.yaml"
