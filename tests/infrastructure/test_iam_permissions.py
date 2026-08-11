@@ -66,7 +66,7 @@ def test_no_wildcard_secret_or_storage_permissions() -> None:
         assert statement not in terraform
 
 
-def test_github_dev_deploy_role_uses_checksum_bundle_and_ssm_only() -> None:
+def test_github_environment_deploy_roles_use_checksum_bundle_and_ssm_only() -> None:
     deployment = (TF_ROOT / "deployment.tf").read_text()
     assert 'aws_s3_bucket" "deployment_artifacts"' in deployment
     assert 'sse_algorithm     = "aws:kms"' in deployment
@@ -76,7 +76,8 @@ def test_github_dev_deploy_role_uses_checksum_bundle_and_ssm_only() -> None:
     assert "ssm:SendCommand" in deployment
     assert "aws_instance.control_plane.arn" in deployment
     assert "document/AWS-RunShellScript" in deployment
-    assert "data.aws_iam_role.github_dev_deploy" in deployment
+    assert 'data "aws_iam_role" "github_deploy"' in deployment
+    assert 'for_each = toset(["dev", "prod"])' in deployment
     assert "aws_iam_role.control_plane.id" in deployment
     assert '"s3:GetObject"' in deployment
     assert '"kms:Decrypt"' in deployment

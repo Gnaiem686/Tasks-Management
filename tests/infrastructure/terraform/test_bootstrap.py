@@ -45,7 +45,7 @@ def test_github_oidc_trust_is_repository_and_environment_scoped() -> None:
     assert "token.actions.githubusercontent.com" in text
     assert "Gnaiem686/Tasks-Management" in text
     assert 'for_each = toset(["dev", "prod"])' in text
-    assert "environment:${each.key}" in text
+    assert 'each.key == "prod" ? "production" : each.key' in text
     assert '"sts:AssumeRoleWithWebIdentity"' in text
     assert 'actions = ["sts:AssumeRole"]' not in text
     assert 'data "aws_iam_openid_connect_provider" "github"' in text
