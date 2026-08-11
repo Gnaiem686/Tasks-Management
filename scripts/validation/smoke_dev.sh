@@ -64,9 +64,12 @@ check notification-queue aws sqs get-queue-attributes \
 
 # The manual scan is the real jira-read check; its persisted result drives the
 # seven-person-dataset and overload-detection checks without exposing Jira credentials.
+scan_window=$(date -u +%F)
+scan_payload=$(jq -nc --arg scope WRD --arg window "$scan_window" \
+  '{scope: $scope, window: $window}')
 scan=$(authorized_curl --request POST \
   --header 'Content-Type: application/json' \
-  --data '{"scope":"WRD","window":"daily"}' \
+  --data "$scan_payload" \
   "$AGENT_API_BASE_URL/api/v1/scans?project_key=WRD")
 scan_id=$(jq -er '.scan_run_id' <<<"$scan")
 check jira-read wait_for_scan "$scan_id"
