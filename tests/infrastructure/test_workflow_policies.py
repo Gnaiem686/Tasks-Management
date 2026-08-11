@@ -15,6 +15,13 @@ def _workflow(name: str) -> dict[str, Any]:
     return cast(dict[str, Any], yaml.load(_text(name), Loader=yaml.BaseLoader))
 
 
+def test_ci_is_reusable_and_targets_integration_and_production() -> None:
+    workflow = _workflow("ci.yml")
+    assert "workflow_call" in workflow["on"]
+    assert workflow["on"]["pull_request"]["branches"] == ["dev", "main"]
+    assert workflow["on"]["push"]["branches"] == ["main"]
+
+
 def test_dev_deployment_is_guarded_and_serialized() -> None:
     workflow = _workflow("deploy-dev.yml")
     text = _text("deploy-dev.yml")
