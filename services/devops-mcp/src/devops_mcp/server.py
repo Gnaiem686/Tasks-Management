@@ -16,8 +16,7 @@ mcp = FastMCP(
     "Workforce DevOps MCP",
     host=os.getenv("DEVOPS_MCP_HOST", "127.0.0.1"),
     port=int(
-        os.getenv("DEVOPS_MCP_LISTEN_PORT")
-        or os.getenv("DEVOPS_MCP_PORT", "8002")
+        os.getenv("DEVOPS_MCP_LISTEN_PORT") or os.getenv("DEVOPS_MCP_PORT") or "8002"
     ),
     streamable_http_path="/mcp",
     stateless_http=True,

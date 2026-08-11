@@ -13,7 +13,7 @@ def test_api_key_is_tab_scoped_and_never_put_in_url_or_dom() -> None:
     assert "sessionStorage.getItem" in script
     assert "sessionStorage.removeItem" in script
     assert "localStorage" not in script
-    assert 'Authorization: `Bearer ${apiKey}`' in script
+    assert "Authorization: `Bearer ${apiKey}`" in script
     assert "encodeURIComponent(apiKey)" not in script
     assert 'type="password"' in template
     assert 'autocomplete="off"' in template

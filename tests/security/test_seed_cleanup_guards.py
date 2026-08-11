@@ -22,7 +22,7 @@ def test_every_non_dev_environment_is_rejected(environment: str) -> None:
 def test_cleanup_requires_matching_ownership_tag() -> None:
     from scripts.jira.scenario import owned_issue_keys
 
-    issues = {
+    issues: dict[str, dict[str, object]] = {
         "WRD-1": {"labels": ["workforce-scenario:seven-person:v1"]},
         "WRD-2": {"labels": ["unrelated"]},
         "OTHER-1": {"labels": ["workforce-scenario:seven-person:v1"]},
@@ -49,9 +49,7 @@ async def test_live_cleanup_deletes_only_mcp_discovered_owned_wrd_issues() -> No
                 "issues": [
                     {
                         "key": "WRD-2",
-                        "fields": {
-                            "labels": ["workforce-scenario:seven-person:v1"]
-                        },
+                        "fields": {"labels": ["workforce-scenario:seven-person:v1"]},
                     }
                 ]
             }

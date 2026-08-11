@@ -18,7 +18,7 @@ class UnsafeLogs(FixtureBackend):
         return ["Authorization: Bearer top-secret", "password=hidden-value"]
 
 
-def base() -> dict[str, str]:
+def base() -> dict[str, Any]:
     return {
         "environment": "dev",
         "correlation_id": "corr-devops",

@@ -60,18 +60,22 @@ def test_deployments_have_probes_resources_and_distinct_service_accounts() -> No
 def test_mcp_deployments_bind_to_pod_network_with_collision_safe_ports() -> None:
     docs = _documents(K8S / "base" / "workloads.yaml")
     deployments = {
-        doc["metadata"]["name"]: doc
-        for doc in docs
-        if doc["kind"] == "Deployment"
+        doc["metadata"]["name"]: doc for doc in docs if doc["kind"] == "Deployment"
     }
     expected = {
-        "workforce-risk-mcp": ("WORKFORCE_MCP_HOST", "WORKFORCE_MCP_LISTEN_PORT", "8001"),
+        "workforce-risk-mcp": (
+            "WORKFORCE_MCP_HOST",
+            "WORKFORCE_MCP_LISTEN_PORT",
+            "8001",
+        ),
         "devops-mcp": ("DEVOPS_MCP_HOST", "DEVOPS_MCP_LISTEN_PORT", "8002"),
     }
     for name, (host_name, port_name, port) in expected.items():
         env = {
             item["name"]: item["value"]
-            for item in deployments[name]["spec"]["template"]["spec"]["containers"][0]["env"]
+            for item in deployments[name]["spec"]["template"]["spec"]["containers"][0][
+                "env"
+            ]
         }
         assert env[host_name] == "0.0.0.0"
         assert env[port_name] == port
@@ -114,9 +118,9 @@ def test_scan_cronjob_is_non_overlapping_and_bounded() -> None:
     assert cronjob["spec"]["successfulJobsHistoryLimit"] >= 1
     assert cronjob["spec"]["failedJobsHistoryLimit"] >= 1
     assert cronjob["spec"]["jobTemplate"]["spec"]["activeDeadlineSeconds"] > 0
-    command = cronjob["spec"]["jobTemplate"]["spec"]["template"]["spec"][
-        "containers"
-    ][0]["command"]
+    command = cronjob["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"][
+        0
+    ]["command"]
     assert command == ["python", "-m", "agent_api.scheduled_scan"]
 
 
@@ -182,10 +186,12 @@ def test_application_network_policy_allows_private_postgres_only() -> None:
         for rule in egress
         if {"protocol": "TCP", "port": 5432} in rule.get("ports", [])
     ]
-    assert postgres_rules == [{
-        "to": [{"ipBlock": {"cidr": "10.40.0.0/16"}}],
-        "ports": [{"protocol": "TCP", "port": 5432}],
-    }]
+    assert postgres_rules == [
+        {
+            "to": [{"ipBlock": {"cidr": "10.40.0.0/16"}}],
+            "ports": [{"protocol": "TCP", "port": 5432}],
+        }
+    ]
 
 
 def test_production_has_provisional_measured_hpa_contract() -> None:

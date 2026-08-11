@@ -75,9 +75,7 @@ class JiraIssueEvidence(BaseModel):
     due_date: date | None
     original_estimate_seconds: int | None
     remaining_estimate_seconds: int | None
-    workforce_employee_id: str | None = Field(
-        default=None, pattern=r"^EMP-00[1-7]$"
-    )
+    workforce_employee_id: str | None = Field(default=None, pattern=r"^EMP-00[1-7]$")
     difficulty: int | None = Field(default=None, ge=1, le=5)
     required_skills: tuple[str, ...] = ()
     structured_evidence_complete: bool | None = None

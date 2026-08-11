@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
+from agent_api.dependencies import EvidenceBundle
 from agent_api.scans.pipeline import EmployeeOverloadScanPipeline
-from workforce_risk.models import EmployeeOverloadInput
+from workforce_risk.models import EmployeeOverloadInput, RiskResult
 
 
 class EvidenceProvider:
     async def get_employee_overload(
         self, employee_id: str, project_key: str, correlation_id: str
-    ):
-        from agent_api.dependencies import EvidenceBundle
-
+    ) -> EvidenceBundle:
         return EvidenceBundle(
             input=EmployeeOverloadInput(
                 employee_id=employee_id,
@@ -32,7 +32,9 @@ class EvidenceProvider:
 
 
 class ScoringClient:
-    async def score(self, input_data, correlation_id: str):
+    async def score(
+        self, input_data: EmployeeOverloadInput, correlation_id: str
+    ) -> dict[str, Any]:
         return {
             "subject_id": input_data.employee_id,
             "environment": "test",
@@ -52,9 +54,16 @@ class ScoringClient:
 
 class Sink:
     def __init__(self) -> None:
-        self.calls = []
+        self.calls: list[tuple[EmployeeOverloadInput, RiskResult, str, str]] = []
 
-    async def persist(self, *, input_data, result, scope, correlation_id):
+    async def persist(
+        self,
+        *,
+        input_data: EmployeeOverloadInput,
+        result: RiskResult,
+        scope: str,
+        correlation_id: str,
+    ) -> tuple[str, str]:
         self.calls.append((input_data, result, scope, correlation_id))
         return "risk-1", "alert-1"
 
@@ -83,7 +92,9 @@ async def test_scan_pipeline_scores_and_persists_configured_employees() -> None:
 @pytest.mark.asyncio
 async def test_scan_pipeline_marks_partial_evidence_degraded() -> None:
     class DegradedEvidence(EvidenceProvider):
-        async def get_employee_overload(self, employee_id, project_key, correlation_id):
+        async def get_employee_overload(
+            self, employee_id: str, project_key: str, correlation_id: str
+        ) -> EvidenceBundle:
             bundle = await super().get_employee_overload(
                 employee_id, project_key, correlation_id
             )

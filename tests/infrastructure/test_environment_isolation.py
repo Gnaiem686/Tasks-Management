@@ -22,8 +22,8 @@ def test_rds_is_private_encrypted_backed_up_and_protected() -> None:
 def test_dev_and_prod_have_distinct_database_names_and_release_inputs() -> None:
     terraform = "\n".join(path.read_text() for path in TF_ROOT.glob("*.tf"))
     assert 'environments = toset(["dev", "prod"])' in terraform
-    assert 'dev_database_name' in terraform
-    assert 'prod_database_name' in terraform
+    assert "dev_database_name" in terraform
+    assert "prod_database_name" in terraform
     assert "environment_release_configuration" in terraform
     assert "WORKFORCE-PROD" in terraform
     assert '"WRD"' in terraform
@@ -31,8 +31,8 @@ def test_dev_and_prod_have_distinct_database_names_and_release_inputs() -> None:
 
 def test_reports_use_separate_private_versioned_encrypted_buckets() -> None:
     storage = _read("storage.tf")
-    assert 'for_each = local.environments' in storage
-    assert 'aws_s3_bucket_public_access_block' in storage
+    assert "for_each = local.environments" in storage
+    assert "aws_s3_bucket_public_access_block" in storage
     assert "block_public_acls       = true" in storage
     assert 'status = "Enabled"' in storage
     assert 'sse_algorithm     = "aws:kms"' in storage
@@ -62,6 +62,6 @@ def test_secret_containers_are_separate_and_contain_no_values() -> None:
 
 def test_environment_outputs_are_sensitive_and_do_not_expose_credentials() -> None:
     outputs = _read("outputs.tf")
-    assert 'sensitive = true' in outputs
+    assert "sensitive = true" in outputs
     assert "password" not in outputs.lower()
     assert "secret_value" not in outputs.lower()

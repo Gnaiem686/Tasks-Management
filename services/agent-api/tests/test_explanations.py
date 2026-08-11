@@ -12,14 +12,14 @@ from workforce_risk.models import RiskResult
 
 
 def test_explanation_provider_uses_fallback_without_bedrock_configuration(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("BEDROCK_MODEL_ID", raising=False)
     assert isinstance(get_explanation_provider(), DeterministicFallbackProvider)
 
 
 def test_explanation_provider_selects_bedrock_when_model_is_configured(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("BEDROCK_MODEL_ID", "test.model-v1")
     monkeypatch.setenv("AWS_REGION", "us-east-1")

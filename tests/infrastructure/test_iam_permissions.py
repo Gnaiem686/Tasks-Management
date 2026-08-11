@@ -92,5 +92,5 @@ def test_worker_nodes_can_pull_images_from_project_ecr_repositories() -> None:
     assert '"ecr:BatchCheckLayerAvailability"' in iam
     assert '"ecr:BatchGetImage"' in iam
     assert '"ecr:GetDownloadUrlForLayer"' in iam
-    assert 'repository/workforce-risk/' in iam
+    assert "repository/workforce-risk/" in iam
     assert 'resource "aws_iam_role_policy" "worker_ecr_pull"' in iam

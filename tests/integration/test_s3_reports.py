@@ -26,7 +26,9 @@ class S3:
     def put_object(self, **kwargs: object) -> dict[str, str]:
         if self.fail:
             raise TimeoutError("private S3 diagnostic")
-        self.objects[str(kwargs["Key"])] = bytes(kwargs["Body"])  # type: ignore[arg-type]
+        body = kwargs["Body"]
+        assert isinstance(body, (bytes, bytearray))
+        self.objects[str(kwargs["Key"])] = bytes(body)
         return {"VersionId": "version-1"}
 
     def generate_presigned_url(

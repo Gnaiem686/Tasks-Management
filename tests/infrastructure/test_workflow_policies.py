@@ -77,7 +77,7 @@ def test_dev_release_bootstraps_namespace_before_server_side_validation() -> Non
     deploy_script = (ROOT / "scripts" / "deployment" / "deploy_release.sh").read_text()
     namespace_bootstrap = 'kubectl create namespace "$RELEASE_NAMESPACE"'
     foundation_validation = (
-        'kubectl apply --server-side --dry-run=server '
+        "kubectl apply --server-side --dry-run=server "
         '-f "$RELEASE_DIRECTORY/foundation.yaml"'
     )
 
@@ -94,7 +94,7 @@ def test_dev_release_removes_terminal_migration_before_dry_run_replacement() -> 
         'kubectl -n "$RELEASE_NAMESPACE" delete job/database-migration --wait=true'
     )
     migration_validation = (
-        'kubectl apply --server-side --dry-run=server '
+        "kubectl apply --server-side --dry-run=server "
         '-f "$RELEASE_DIRECTORY/migration.yaml"'
     )
 

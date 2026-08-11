@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Generator
+from collections.abc import AsyncIterator, Generator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 from agent_api.auth.roles import ApplicationRole
@@ -40,7 +40,9 @@ class AuditStore:
         return [], 0, True
 
 
-def provider(role: ApplicationRole, environment: str = "test") -> Any:
+def provider(
+    role: ApplicationRole, environment: Literal["dev", "prod", "test"] = "test"
+) -> Any:
     async def dependency() -> AuthenticatedPrincipal:
         return AuthenticatedPrincipal(
             actor_id="verified",
@@ -122,9 +124,11 @@ class UnavailableDatabase:
         pass
 
     @asynccontextmanager
-    async def transaction(self) -> Any:
-        raise ConnectionError("database unavailable")
-        yield
+    async def transaction(self) -> AsyncIterator[Any]:
+        async def unavailable() -> Any:
+            raise ConnectionError("database unavailable")
+
+        yield await unavailable()
 
     async def close(self) -> None:
         pass

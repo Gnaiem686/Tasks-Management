@@ -1,3 +1,5 @@
+from typing import Any, cast
+
 from workforce_observability.metrics import MetricRegistry
 
 
@@ -30,7 +32,8 @@ def test_metric_registry_rejects_identifiers_and_unbounded_labels() -> None:
         "error",
     ):
         try:
-            registry.increment(
+            increment = cast(Any, registry.increment)
+            increment(
                 "workforce_mcp_requests_total",
                 environment="dev",
                 **{forbidden: "unsafe"},

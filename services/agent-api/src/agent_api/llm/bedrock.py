@@ -86,9 +86,7 @@ class BedrockExplanationProvider:
         return False
 
     @staticmethod
-    def _validate_result(
-        request: ExplanationRequest, result: ModelExplanation
-    ) -> None:
+    def _validate_result(request: ExplanationRequest, result: ModelExplanation) -> None:
         expected_level = request.risk.level.value if request.risk.level else None
         if result.score != request.risk.score or result.risk_level != expected_level:
             raise ValueError("model changed deterministic risk result")

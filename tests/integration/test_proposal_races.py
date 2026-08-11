@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 import pytest
 from workforce_persistence.database import Database
@@ -24,7 +25,7 @@ DATABASE_URL = os.getenv(
 NOW = datetime(2026, 8, 9, 12, tzinfo=UTC)
 
 
-def actor(role: str = "manager") -> ProposalActor:
+def actor(role: Literal["manager", "administrator"] = "manager") -> ProposalActor:
     return ProposalActor(
         actor_id="manager-safe",
         role=role,

@@ -12,31 +12,31 @@ def _terraform() -> str:
 def test_cluster_is_kubeadm_not_eks_and_nodes_are_private() -> None:
     terraform = _terraform().lower()
     assert "aws_eks_" not in terraform
-    assert 'map_public_ip_on_launch = false' in terraform
-    assert 'associate_public_ip_address = false' in terraform
-    assert 'from_port   = 22' not in terraform
+    assert "map_public_ip_on_launch = false" in terraform
+    assert "associate_public_ip_address = false" in terraform
+    assert "from_port   = 22" not in terraform
     assert 'var.admin_cidr != "0.0.0.0/0"' in terraform
-    assert 'manage_via_ssm' in terraform
+    assert "manage_via_ssm" in terraform
     assert 'load_balancer_type = "network"' in terraform
-    assert 'source_security_group_id = aws_security_group.ingress_nlb.id' in terraform
+    assert "source_security_group_id = aws_security_group.ingress_nlb.id" in terraform
 
 
 def test_cluster_state_uses_encrypted_remote_locking() -> None:
     versions = (TF_ROOT / "versions.tf").read_text()
     assert 'backend "s3"' in versions
-    assert 'encrypt      = true' in versions
-    assert 'use_lockfile = true' in versions
+    assert "encrypt      = true" in versions
+    assert "use_lockfile = true" in versions
 
 
 def test_join_material_is_encrypted_short_lived_and_least_privilege() -> None:
     terraform = _terraform()
     assert 'type   = "SecureString"' in terraform
     assert "key_id = aws_kms_key.join_material.arn" in terraform
-    assert 'join_token_ttl' in terraform
-    assert 'ssm:GetParameter' in terraform
-    assert 'ssm:PutParameter' in terraform
-    assert 'ssm:DeleteParameter' in terraform
-    assert 'resources = [aws_ssm_parameter.kubeadm_join.arn]' in terraform
+    assert "join_token_ttl" in terraform
+    assert "ssm:GetParameter" in terraform
+    assert "ssm:PutParameter" in terraform
+    assert "ssm:DeleteParameter" in terraform
+    assert "resources = [aws_ssm_parameter.kubeadm_join.arn]" in terraform
 
 
 def test_control_plane_publishes_minimal_join_material() -> None:
@@ -49,8 +49,8 @@ def test_control_plane_publishes_minimal_join_material() -> None:
     assert "certificate-key" not in script
     assert "service-account-issuer" in script
     assert "service-account-jwks-uri" in script
-    assert 'kubectl get --raw /.well-known/openid-configuration' in script
-    assert 'kubectl get --raw /openid/v1/jwks' in script
+    assert "kubectl get --raw /.well-known/openid-configuration" in script
+    assert "kubectl get --raw /openid/v1/jwks" in script
     assert "aws s3 cp" in script
 
 
@@ -72,7 +72,9 @@ def test_workers_install_checksum_verified_ecr_credential_provider() -> None:
     assert 'ecr_credential_provider_version = "v1.34.3-5-gf32b6d4"' in compute
     assert "ecr_credential_provider_sha256" in compute
     assert "1a4cb0f628b5e76d468c00cd5507c86cd324731bf379442ad82db5a743bb648d" in compute
-    assert "k8s-staging-provider-aws/releases/${ecr_credential_provider_version}" in script
+    assert (
+        "k8s-staging-provider-aws/releases/${ecr_credential_provider_version}" in script
+    )
     assert "${ecr_credential_provider_sha256}" in script
     assert "sha256sum -c -" in script
     assert "CredentialProviderConfig" in script
@@ -88,7 +90,7 @@ def test_versions_are_explicit_and_replacement_is_supported() -> None:
     assert 'variable "containerd_version"' in variables
     assert 'variable "calico_version"' in variables
     assert "validation {" in variables
-    assert 'replace_triggered_by = [terraform_data.node_generation]' in compute
+    assert "replace_triggered_by = [terraform_data.node_generation]" in compute
     assert "aws_iam_role_policy.control_plane_join" in compute
     assert "aws_iam_role_policy.worker_join" in compute
     assert "aws_route_table_association.private" in compute
@@ -112,7 +114,7 @@ def test_versions_are_explicit_and_replacement_is_supported() -> None:
 def test_verification_script_checks_topology_and_parameter_cleanup() -> None:
     script = (ROOT / "scripts" / "validation" / "verify_node_join.sh").read_text()
     assert "kubectl get nodes" in script
-    assert 'control-plane' in script
-    assert 'worker' in script
+    assert "control-plane" in script
+    assert "worker" in script
     assert "ssm get-parameter" in script
     assert "must be deleted" in script
