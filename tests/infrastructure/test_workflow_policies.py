@@ -173,6 +173,7 @@ def test_dev_smoke_uses_a_concrete_utc_scan_window() -> None:
     smoke = (ROOT / "scripts" / "validation" / "smoke_dev.sh").read_text()
     assert "date -u +%F" in smoke
     assert '"window":"daily"' not in smoke
+    assert "api/v1/scans/$scan_id?project_key=WRD" in smoke
 
 
 def test_workflow_publishes_summaries_and_retains_artifacts() -> None:
