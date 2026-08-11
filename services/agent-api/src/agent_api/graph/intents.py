@@ -1,0 +1,50 @@
+from __future__ import annotations
+
+from enum import StrEnum
+
+
+class Intent(StrEnum):
+    EXPLAIN_PROJECT_RISK = "explain_project_risk"
+    EXPLAIN_EMPLOYEE_OVERLOAD = "explain_employee_overload"
+    EVALUATE_TASK_FIT = "evaluate_task_fit"
+    EXPLAIN_HISTORY = "explain_history"
+    REASSIGNMENT_CANDIDATES = "reassignment_candidates"
+    WHAT_IF_SIMULATION = "what_if_simulation"
+    OPERATIONS_DIAGNOSIS = "operations_diagnosis"
+    UNSUPPORTED = "unsupported"
+
+
+READ_ONLY_TOOL_ALLOWLISTS: dict[Intent, frozenset[str]] = {
+    Intent.EXPLAIN_PROJECT_RISK: frozenset({"get_project_risk"}),
+    Intent.EXPLAIN_EMPLOYEE_OVERLOAD: frozenset({"get_employee_overload_risk"}),
+    Intent.EVALUATE_TASK_FIT: frozenset({"get_task_fit_risk"}),
+    Intent.EXPLAIN_HISTORY: frozenset({"get_risk_history"}),
+    Intent.REASSIGNMENT_CANDIDATES: frozenset({"get_reassignment_candidates"}),
+    Intent.WHAT_IF_SIMULATION: frozenset({"simulate_reassignment"}),
+    Intent.OPERATIONS_DIAGNOSIS: frozenset({"diagnose_operations_read_only"}),
+}
+
+
+def classify_intent(question: str) -> Intent:
+    text = " ".join(question.lower().split())
+    if any(word in text for word in ("approve", "execute", "change assignee")):
+        return Intent.UNSUPPORTED
+    if "what if" in text or "simulate" in text:
+        return Intent.WHAT_IF_SIMULATION
+    if any(word in text for word in ("candidate", "which employee", "could take")):
+        return Intent.REASSIGNMENT_CANDIDATES
+    if "task" in text and any(word in text for word in ("fit", "skill", "appropriate")):
+        return Intent.EVALUATE_TASK_FIT
+    if any(word in text for word in ("service", "pod", "deployment")) and any(
+        word in text for word in ("unhealthy", "latency", "failed", "failure")
+    ):
+        return Intent.OPERATIONS_DIAGNOSIS
+    if any(word in text for word in ("develop", "prevent", "recurrence", "history")):
+        return Intent.EXPLAIN_HISTORY
+    if "project" in text and any(word in text for word in ("risk", "late", "delay")):
+        return Intent.EXPLAIN_PROJECT_RISK
+    if "employee" in text and any(
+        word in text for word in ("overload", "progress", "finish", "workload")
+    ):
+        return Intent.EXPLAIN_EMPLOYEE_OVERLOAD
+    return Intent.UNSUPPORTED

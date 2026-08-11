@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+exec > >(systemd-cat -t workforce-kubeadm-control-plane) 2>&1
+
+if test -f /etc/kubernetes/admin.conf; then
+  echo "Control plane is already initialized"
+  exit 0
+fi
+
+export DEBIAN_FRONTEND=noninteractive
+swapoff -a
+sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
+cat >/etc/modules-load.d/kubernetes.conf <<'MODULES'
+overlay
+br_netfilter
+MODULES
+modprobe overlay
+modprobe br_netfilter
+cat >/etc/sysctl.d/99-kubernetes.conf <<'SYSCTL'
+net.bridge.bridge-nf-call-iptables=1
+net.bridge.bridge-nf-call-ip6tables=1
+net.ipv4.ip_forward=1
+SYSCTL
+sysctl --system
+
+apt-get update
+apt-get install -y apt-transport-https ca-certificates curl gpg unzip
+if ! aws --version 2>&1 | grep -q "aws-cli/${aws_cli_version}"; then
+  curl -fsSLo /tmp/awscliv2.zip \
+    "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${aws_cli_version}.zip"
+  echo "${aws_cli_sha256}  /tmp/awscliv2.zip" | sha256sum -c -
+  mkdir -p /var/tmp/workforce-aws-cli-install
+  unzip -qo /tmp/awscliv2.zip -d /var/tmp/workforce-aws-cli-install
+  /var/tmp/workforce-aws-cli-install/aws/install --update
+fi
+apt-get install -y "containerd=${containerd_version}"
+mkdir -p /etc/containerd
+containerd config default >/etc/containerd/config.toml
+sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+systemctl enable --now containerd
+
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL "https://pkgs.k8s.io/core:/stable:/v${kubernetes_version}/deb/Release.key" \
+  | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${kubernetes_version}/deb/ /" \
+  >/etc/apt/sources.list.d/kubernetes.list
+apt-get update
+apt-get install -y \
+  "kubelet=${kubernetes_package_version}" \
+  "kubeadm=${kubernetes_package_version}" \
+  "kubectl=${kubernetes_package_version}"
+apt-mark hold kubelet kubeadm kubectl containerd
+
+PRIVATE_IP=$(hostname -I | awk '{print $1}')
+cat >/etc/kubernetes/kubeadm-config.yaml <<KUBEADM
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: "$PRIVATE_IP"
+---
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+kubernetesVersion: "v${kubernetes_semver}"
+networking:
+  podSubnet: 192.168.0.0/16
+apiServer:
+  extraArgs:
+    - name: service-account-issuer
+      value: "${oidc_issuer}"
+    - name: service-account-jwks-uri
+      value: "${oidc_jwks_uri}"
+KUBEADM
+kubeadm init --config /etc/kubernetes/kubeadm-config.yaml
+
+export KUBECONFIG=/etc/kubernetes/admin.conf
+curl -fsSLo /tmp/calico.yaml \
+  "https://raw.githubusercontent.com/projectcalico/calico/${calico_version}/manifests/calico.yaml"
+kubectl apply -f /tmp/calico.yaml
+
+mkdir -p /tmp/workforce-oidc/.well-known /tmp/workforce-oidc/openid/v1
+kubectl get --raw /.well-known/openid-configuration \
+  >/tmp/workforce-oidc/.well-known/openid-configuration
+kubectl get --raw /openid/v1/jwks >/tmp/workforce-oidc/openid/v1/jwks
+for attempt in $(seq 1 10); do
+  if aws s3 cp --region "${aws_region}" --content-type application/json \
+    /tmp/workforce-oidc/.well-known/openid-configuration \
+    "s3://${oidc_bucket}/.well-known/openid-configuration" && \
+    aws s3 cp --region "${aws_region}" --content-type application/json \
+    /tmp/workforce-oidc/openid/v1/jwks "s3://${oidc_bucket}/openid/v1/jwks"; then
+    break
+  fi
+  if [[ "$attempt" == 10 ]]; then
+    echo "Unable to publish Kubernetes OIDC discovery after bounded retries" >&2
+    exit 1
+  fi
+  sleep $((attempt * 3))
+done
+
+JOIN_COMMAND=$(kubeadm token create --ttl "${join_token_ttl}" --print-join-command)
+if [[ "$JOIN_COMMAND" != *"--discovery-token-ca-cert-hash sha256:"* ]]; then
+  echo "Generated join command is missing the CA certificate hash"
+  exit 1
+fi
+aws ssm put-parameter \
+  --region "${aws_region}" \
+  --name "${join_parameter_name}" \
+  --type SecureString \
+  --overwrite \
+  --value "$JOIN_COMMAND"
+
+AWS_CLI=$(command -v aws)
+systemd-run --unit workforce-expire-kubeadm-join \
+  --on-active="${join_token_ttl}" \
+  "$AWS_CLI" ssm delete-parameter \
+  --region "${aws_region}" \
+  --name "${join_parameter_name}"
+echo "Control plane initialized and short-lived join material published"

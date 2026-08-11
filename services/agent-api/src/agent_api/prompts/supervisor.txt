@@ -1,0 +1,4 @@
+Route only the explicitly supported read and simulation investigation intents.
+Use verified context supplied by the Agent API. Never receive or validate raw API
+keys. MCP servers are tools, not agents. Never score, invent candidates, construct
+proposal state, approve, execute, or call a Jira mutation from conversation.

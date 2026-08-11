@@ -1,0 +1,265 @@
+name: Deploy dev
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: vars.DEPLOYMENTS_ENABLED == 'true'
+    environment: dev
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      CONTROL_PLANE_INSTANCE_ID: ${{ vars.CONTROL_PLANE_INSTANCE_ID }}
+      DEPLOYMENT_BUCKET: ${{ vars.DEPLOYMENT_BUCKET }}
+      AGENT_API_BASE_URL: ${{ vars.DEV_AGENT_API_BASE_URL }}
+      DEV_REPORT_BUCKET: ${{ vars.DEV_REPORT_BUCKET }}
+      DEV_NOTIFICATION_QUEUE_URL: ${{ vars.DEV_NOTIFICATION_QUEUE_URL }}
+      DEV_APPLICATION_ROLE_ARN: ${{ vars.DEV_APPLICATION_ROLE_ARN }}
+      DEV_EXTERNAL_SECRETS_ROLE_ARN: ${{ vars.DEV_EXTERNAL_SECRETS_ROLE_ARN }}
+      DEV_MANAGER_API_KEY: ${{ secrets.DEV_MANAGER_API_KEY }}
+      JIRA_MUTATION_ENABLED: "false"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version-file: .python-version
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+        with:
+          version: "0.12.2"
+          enable-cache: true
+
+      - name: Install locked dependencies
+        run: uv sync --all-packages --frozen
+
+      - name: Configure dev AWS identity
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4
+        with:
+          role-to-assume: ${{ vars.DEV_AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Prepare artifacts
+        run: mkdir -p artifacts/{tests,security,sbom,terraform,kubernetes,deployment/release}
+
+      - name: Install checksum-verified release tools
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          tools="$RUNNER_TEMP/workforce-tools"
+          mkdir -p "$tools"
+
+          curl -fsSLo "$tools/kustomize.tar.gz" \
+            https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.8.1/kustomize_v5.8.1_linux_amd64.tar.gz
+          curl -fsSLo "$tools/kustomize-checksums.txt" \
+            https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.8.1/checksums.txt
+          grep 'kustomize_v5.8.1_linux_amd64.tar.gz' "$tools/kustomize-checksums.txt" \
+            | sed 's#kustomize_v5.8.1_linux_amd64.tar.gz#kustomize.tar.gz#' \
+            | (cd "$tools" && sha256sum -c -)
+
+          curl -fsSLo "$tools/kubeconform.tar.gz" \
+            https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz
+          curl -fsSLo "$tools/kubeconform-checksums.txt" \
+            https://github.com/yannh/kubeconform/releases/download/v0.7.0/CHECKSUMS
+          grep 'kubeconform-linux-amd64.tar.gz' "$tools/kubeconform-checksums.txt" \
+            | sed 's#kubeconform-linux-amd64.tar.gz#kubeconform.tar.gz#' \
+            | (cd "$tools" && sha256sum -c -)
+
+          curl -fsSLo "$tools/syft.tar.gz" \
+            https://github.com/anchore/syft/releases/download/v1.50.0/syft_1.50.0_linux_amd64.tar.gz
+          curl -fsSLo "$tools/syft-checksums.txt" \
+            https://github.com/anchore/syft/releases/download/v1.50.0/syft_1.50.0_checksums.txt
+          grep 'syft_1.50.0_linux_amd64.tar.gz' "$tools/syft-checksums.txt" \
+            | sed 's#syft_1.50.0_linux_amd64.tar.gz#syft.tar.gz#' \
+            | (cd "$tools" && sha256sum -c -)
+
+          curl -fsSLo "$tools/trivy.tar.gz" \
+            https://github.com/aquasecurity/trivy/releases/download/v0.70.0/trivy_0.70.0_Linux-64bit.tar.gz
+          curl -fsSLo "$tools/trivy-checksums.txt" \
+            https://github.com/aquasecurity/trivy/releases/download/v0.70.0/trivy_0.70.0_checksums.txt
+          grep 'trivy_0.70.0_Linux-64bit.tar.gz' "$tools/trivy-checksums.txt" \
+            | sed 's#trivy_0.70.0_Linux-64bit.tar.gz#trivy.tar.gz#' \
+            | (cd "$tools" && sha256sum -c -)
+
+          tar -xzf "$tools/kustomize.tar.gz" -C "$tools"
+          tar -xzf "$tools/kubeconform.tar.gz" -C "$tools" kubeconform
+          tar -xzf "$tools/syft.tar.gz" -C "$tools" syft
+          tar -xzf "$tools/trivy.tar.gz" -C "$tools" trivy
+          echo "$tools" >> "$GITHUB_PATH"
+
+      - name: Authenticate Docker to ECR
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          registry="$(aws sts get-caller-identity --query Account --output text).dkr.ecr.${AWS_REGION}.amazonaws.com"
+          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$registry"
+          echo "ECR_REGISTRY=$registry" >> "$GITHUB_ENV"
+
+      - name: Build, push, and resolve immutable images
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          image_digests='{}'
+          for service in agent-api workforce-risk-mcp devops-mcp notification-worker; do
+            repository="$ECR_REGISTRY/workforce-risk/$service"
+            docker build --file "services/$service/Dockerfile" --tag "$repository:$GITHUB_SHA" .
+            docker push "$repository:$GITHUB_SHA"
+            docker inspect "$repository:$GITHUB_SHA" >/dev/null
+            digest=$(aws ecr describe-images \
+              --repository-name "workforce-risk/$service" \
+              --image-ids "imageTag=$GITHUB_SHA" \
+              --query 'imageDetails[0].imageDigest' --output text)
+            [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+            reference="$repository@$digest"
+            image_digests=$(jq -c --arg service "$service" --arg reference "$reference" \
+              '. + {($service): $reference}' <<<"$image_digests")
+          done
+          echo "IMAGE_DIGESTS_JSON=$image_digests" >> "$GITHUB_ENV"
+
+      - name: Scan images and generate SBOMs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for service in agent-api workforce-risk-mcp devops-mcp notification-worker; do
+            reference=$(jq -er --arg service "$service" '.[$service]' <<<"$IMAGE_DIGESTS_JSON")
+            syft "$reference" -o cyclonedx-json="artifacts/sbom/$service.json"
+            trivy image --exit-code 1 --severity CRITICAL --format json \
+              --output "artifacts/security/$service-trivy.json" "$reference"
+          done
+
+      - name: Render and split dev release
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for service in agent-api workforce-risk-mcp devops-mcp notification-worker; do
+            reference=$(jq -er --arg service "$service" '.[$service]' <<<"$IMAGE_DIGESTS_JSON")
+            (cd infra/kubernetes/overlays/dev && \
+              kustomize edit set image "registry.invalid/workforce-risk/$service=$reference")
+          done
+          kustomize build infra/kubernetes/overlays/dev > artifacts/kubernetes/dev-rendered.yaml
+          test -n "$DEV_APPLICATION_ROLE_ARN"
+          test -n "$DEV_EXTERNAL_SECRETS_ROLE_ARN"
+          sed -i "s|WORKFORCE_APPLICATION_ROLE_ARN|$DEV_APPLICATION_ROLE_ARN|g" \
+            artifacts/kubernetes/dev-rendered.yaml
+          sed -i "s|WORKFORCE_EXTERNAL_SECRETS_ROLE_ARN|$DEV_EXTERNAL_SECRETS_ROLE_ARN|g" \
+            artifacts/kubernetes/dev-rendered.yaml
+          sed -i "s|WORKFORCE_REPORT_BUCKET|$DEV_REPORT_BUCKET|g" \
+            artifacts/kubernetes/dev-rendered.yaml
+          sed -i "s|WORKFORCE_NOTIFICATION_QUEUE_URL|$DEV_NOTIFICATION_QUEUE_URL|g" \
+            artifacts/kubernetes/dev-rendered.yaml
+          if grep -q 'WORKFORCE_.*_ROLE_ARN' artifacts/kubernetes/dev-rendered.yaml; then
+            echo 'Unresolved workload role placeholder' >&2
+            exit 1
+          fi
+          kubeconform -strict -exit-on-error -ignore-missing-schemas artifacts/kubernetes/dev-rendered.yaml
+          uv run python -m scripts.deployment.split_manifests \
+            artifacts/kubernetes/dev-rendered.yaml artifacts/deployment/release
+          cp scripts/deployment/deploy_release.sh artifacts/deployment/release/
+          tar -czf artifacts/deployment/release-bundle.tar.gz \
+            -C artifacts/deployment/release .
+          (cd artifacts/deployment && sha256sum release-bundle.tar.gz > release-bundle.sha256)
+
+      - name: Upload checksum-protected bundle
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bundle_prefix="releases/dev/$GITHUB_SHA"
+          aws s3 cp artifacts/deployment/release-bundle.tar.gz \
+            "s3://$DEPLOYMENT_BUCKET/$bundle_prefix/release-bundle.tar.gz"
+          aws s3 cp artifacts/deployment/release-bundle.sha256 \
+            "s3://$DEPLOYMENT_BUCKET/$bundle_prefix/release-bundle.sha256"
+          echo "BUNDLE_PREFIX=$bundle_prefix" >> "$GITHUB_ENV"
+
+      - name: Execute private deployment through SSM
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          commands=$(jq -nc \
+            --arg bucket "$DEPLOYMENT_BUCKET" \
+            --arg prefix "$BUNDLE_PREFIX" \
+            --arg sha "$GITHUB_SHA" \
+            '{commands:[
+              "set -Eeuo pipefail",
+              "install -d -m 0700 /var/lib/workforce-releases/" + $sha,
+              "cd /var/lib/workforce-releases/" + $sha,
+              "aws s3 cp s3://" + $bucket + "/" + $prefix + "/release-bundle.tar.gz .",
+              "aws s3 cp s3://" + $bucket + "/" + $prefix + "/release-bundle.sha256 .",
+              "sha256sum -c release-bundle.sha256",
+              "tar -xzf release-bundle.tar.gz",
+              "chmod 0700 deploy_release.sh",
+              "RELEASE_DIRECTORY=$PWD RELEASE_NAMESPACE=dev ./deploy_release.sh"
+            ]}')
+          command_id=$(aws ssm send-command \
+            --instance-ids "$CONTROL_PLANE_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --parameters "$commands" \
+            --query 'Command.CommandId' --output text)
+          aws ssm wait command-executed \
+            --command-id "$command_id" --instance-id "$CONTROL_PLANE_INSTANCE_ID"
+          aws ssm get-command-invocation \
+            --command-id "$command_id" --instance-id "$CONTROL_PLANE_INSTANCE_ID" \
+            > artifacts/deployment/ssm-result.json
+          jq -e '.Status == "Success"' artifacts/deployment/ssm-result.json
+
+      - name: Run dev smoke tests
+        run: bash scripts/validation/smoke_dev.sh
+
+      - name: Run deployment policy regression tests
+        run: >-
+          uv run pytest tests/infrastructure
+          --junitxml=artifacts/tests/infrastructure-junit.xml
+          --cov=scripts
+          --cov-report=xml:artifacts/tests/coverage.xml
+          -q
+
+      - name: Record release candidate
+        env:
+          RELEASE_ENVIRONMENT: dev
+          GIT_COMMIT: ${{ github.sha }}
+          MANIFEST_VERSION: ${{ github.sha }}
+          SCORING_VERSION: v1
+          MIGRATION_VERSION: head
+          DEPLOYMENT_ACTOR: ${{ github.actor }}
+          VALIDATION_RESULT: passed
+        run: bash scripts/validation/record_release.sh
+
+      - name: Publish coverage
+        uses: codecov/codecov-action@04b047e8bb82a0c002c8312c1c880fbc6a999d45 # v5
+        with:
+          files: artifacts/tests/coverage.xml
+          fail_ci_if_error: true
+          use_oidc: true
+
+      - name: Write deployment summary
+        if: always()
+        run: |
+          echo '## Dev deployment' >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo '- Images: immutable ECR digests' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Migration: bounded and required before rollout' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Evidence: `artifacts/deployment/`' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Retain deployment evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dev-release-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 30

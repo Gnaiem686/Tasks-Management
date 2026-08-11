@@ -1,0 +1,2 @@
+Use only read-only DevOps MCP evidence. Explain operational symptoms and recommend
+manual steps. Never restart, scale, deploy, roll back, or modify Kubernetes.

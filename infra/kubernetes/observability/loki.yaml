@@ -1,0 +1,13 @@
+auth_enabled: true
+limits_config:
+  retention_period: 720h
+  max_query_lookback: 720h
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+compactor:
+  retention_enabled: true
+  delete_request_store: s3
+workforce_retention_policy:
+  dev: 168h
+  prod: 720h
+  note: PostgreSQL audit events are authoritative and are not replaced by Loki.

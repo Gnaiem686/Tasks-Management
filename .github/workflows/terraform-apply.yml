@@ -1,0 +1,70 @@
+name: Terraform apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      root:
+        description: Terraform root from the reviewed plan
+        required: true
+        type: choice
+        options: [bootstrap, shared, environment]
+      plan_run_id:
+        description: GitHub Actions run containing the reviewed plan artifact
+        required: true
+        type: string
+      confirmation:
+        description: Type APPLY
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+concurrency:
+  group: terraform-apply-${{ inputs.root }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: vars.DEPLOYMENTS_ENABLED == 'true' && inputs.confirmation == 'APPLY'
+    environment: infrastructure-apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with: {terraform_version: "1.10.5"}
+      - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4
+        with:
+          role-to-assume: ${{ vars.TERRAFORM_APPLY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Download reviewed plan
+        run: gh run download "${{ inputs.plan_run_id }}" --name "terraform-plan-${{ inputs.root }}"
+      - name: Verify plan belongs to selected commit
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(cat '${{ inputs.root }}-plan-commit.txt')" = "$GITHUB_SHA"
+          test -s "${{ inputs.root }}.tfplan"
+      - name: Initialize matching backend
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          root="infra/terraform/${{ inputs.root }}"
+          if [[ "${{ inputs.root }}" == "bootstrap" ]]; then
+            terraform -chdir="$root" init
+          else
+            terraform -chdir="$root" init \
+              -backend-config="bucket=${{ vars.TERRAFORM_STATE_BUCKET }}"
+          fi
+      - name: Apply exact reviewed plan
+        run: terraform -chdir="infra/terraform/${{ inputs.root }}" apply "$GITHUB_WORKSPACE/${{ inputs.root }}.tfplan"
+      - name: Write apply summary
+        if: always()
+        run: echo 'Terraform apply used the exact reviewed plan artifact.' >> "$GITHUB_STEP_SUMMARY"

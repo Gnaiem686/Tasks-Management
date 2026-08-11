@@ -340,9 +340,8 @@ production scope.
 
 Jira Cloud contains isolated synthetic scopes:
 
-- A configured development project: either adopt the temporary `WRD`
-  proof-of-concept project or create `WORKFORCE-DEV`, repeat the required MCP
-  smoke tests, and then use it for development, integration tests, seeding,
+- The already validated `WRD` project is the sole configured synthetic
+  development scope for integration tests, seeding, scenario progression,
   cleanup, and the live mutation demo.
 - `WORKFORCE-PROD` for production-scoped read-only validation and synthetic
   production-shaped data.
@@ -354,22 +353,24 @@ development project key, and always reject `WORKFORCE-PROD`.
 Production smoke tests are read-only.
 
 The seeded development team contains seven synthetic workforce profiles,
-identified as `EMP-001` through `EMP-007`, in PostgreSQL. Jira tasks use a
-configured `Workforce Employee ID` custom field to associate work with those
-profiles. Profiles contain only approved work-planning data such as role,
+identified as `EMP-001` through `EMP-007`, in PostgreSQL. Synthetic Jira tasks
+use exactly one structured label in the form `workforce-employee:EMP-00N` to
+associate work with those profiles; seed validation rejects missing, malformed,
+or multiple workforce labels. Profiles contain only approved work-planning data such as role,
 seniority, documented skills/proficiency, capacity, allocation, mentoring
 availability, and optional Jira account mapping.
 
 Seven synthetic profiles do not require seven Atlassian accounts. Two real,
 synthetic Jira development accounts are retained for the controlled assignee
 mutation proof: the expected current assignee and approved target assignee.
-General risk analysis uses `Workforce Employee ID`; the live external-write
+General risk analysis uses the structured workforce label; the live external-write
 demonstration updates Jira's real `assignee` field only between those two test
 accounts and verifies the returned `accountId`.
 
 The versioned dev seed/reset workflow automatically prepares profiles, tasks,
 estimates, remaining estimates, deadlines, priorities, required skills,
-difficulty, dependencies, blockers, structured custom fields, safe comment
+difficulty, dependencies, blockers, the structured workforce label, configured
+custom fields such as `Blocker Category`, safe comment
 fixtures, workload distribution, similar-task fixtures, and suitable/unsuitable
 reassignment candidates. Seed operations are idempotent and scenario-tagged;
 cleanup deletes only records owned by that scenario and refuses production.
@@ -378,7 +379,7 @@ The scenario simulator is external test tooling, not a deployed application
 service. No simulator pod, Job, CronJob, service, or `simulation` namespace is
 created. Versioned Python scripts run from a developer workstation or the
 dedicated GitHub Actions scenario workflow and update only the configured
-`WORKFORCE-SIM` Jira project through guarded official Jira APIs. They can seed,
+`WRD` Jira project through guarded official Jira APIs. They can seed,
 reset, advance deterministic scenario steps, verify the resulting Jira state,
 trigger an authenticated dev scan, and compare agent results with the expected
 fixture outcomes.
@@ -387,7 +388,7 @@ The simulator and agent never communicate directly. The simulator changes Jira;
 the Agent API deployed in `dev` observes those changes through real Atlassian
 Rovo MCP calls. Simulator credentials have no access to `WORKFORCE-PROD`, AWS
 production resources, or the Kubernetes API. The simulator refuses every Jira
-scope other than `WORKFORCE-SIM` and cannot be invoked by LangGraph.
+scope other than `WRD` and cannot be invoked by LangGraph.
 The `dev` and `prod` namespaces therefore represent candidate and approved
 versions of the agent stack, while environment-specific configuration, data,
 credentials, and Jira scopes remain isolated.
@@ -582,10 +583,12 @@ the temporary synthetic `WRD` proof-of-concept project:
 
 The specification intentionally omits personal email addresses and full Jira
 account IDs. This proof of concept is complete, not a pending implementation
-assumption. Before implementation, the project must either adopt `WRD` as the
-configured development Jira scope or create `WORKFORCE-DEV` and repeat the MCP
-discovery, structured-field, custom-field, account-resolution, assignee-update,
-and read-back smoke tests there.
+assumption. `WRD` is the selected configured development Jira scope. A
+replacement project may be created only if a verified Jira limitation makes
+`WRD` unusable; before it becomes a mutation scope, the replacement must pass
+the same MCP discovery, structured-field, custom-field, account-resolution,
+assignee-update, and read-back smoke tests and replace `WRD` in the reviewed
+allowlist and guards.
 
 ### 8.3 Evidence boundaries and delay explanations
 
@@ -1689,7 +1692,7 @@ No demonstration mutation uses production data.
 | 3.5 | AWS services | RDS, S3, SQS/DLQ, SES, Secrets Manager, ECR, SSM, and Bedrock; Cognito is excluded | Sections 5, 12, 14, and 17 | Terraform-managed services | Service integration and IAM tests | Infrastructure | Requires implementation |
 | 3.6 | IaC | Terraform owns all project AWS resources; no manual AWS Console creation | Section 17.1 | Remote state, plans, and applies | Terraform validation and security tests | Infrastructure | Requires implementation |
 | 3.7 | Jira automation | Initial Atlassian consent may be documented; seven-profile synthetic data, repeatable Jira setup, validation, seeding, reset, and cleanup are scripted/API-driven; REST use is dev-administrative only | Sections 6.4, 17.1, and 23.1 | Versioned automation scripts, two synthetic Jira test accounts, and consent runbook | Dataset completeness, idempotency, ownership-tag, permission, and prod-refusal tests | Infrastructure | Selected / requires implementation |
-| 3.8 | External simulator | Scenario progression runs only from versioned workstation/GitHub Actions tooling against `WORKFORCE-SIM`; no simulator workload or namespace exists in Kubernetes | Sections 6.4, 18, and 21 | `run-scenario.yml`, advance/evaluate scripts, expected-outcome fixtures, and scope guards | Step idempotency, real-MCP observation, result comparison, Kubernetes-absence, and production-refusal tests | Testing infrastructure | Selected / requires implementation |
+| 3.8 | External simulator | Scenario progression runs only from versioned workstation/GitHub Actions tooling against the guarded `WRD` synthetic project; no simulator workload or namespace exists in Kubernetes | Sections 6.4, 18, and 21 | `run-scenario.yml`, advance/evaluate scripts, expected-outcome fixtures, and exact `WRD` scope guards | Step idempotency, real-MCP observation, result comparison, Kubernetes-absence, and production-refusal tests | Testing infrastructure | Selected / requires implementation |
 | 4.1 | CI/CD | Required PR checks, environment concurrency, and immutable digest promotion | Section 18 | GitHub Actions workflows | Workflow and deployment rehearsals | Infrastructure | Requires implementation |
 | 4.2 | CI reporting | Actions summaries, JUnit, Codecov/equivalent, and retained diagnostic/security/deployment artifacts | Sections 18 and 20 | CI summaries and artifacts | Failed-run artifact inspection | Infrastructure | Requires implementation |
 | 4.3 | Deployment | GitHub Actions plus Helm/manifests is the MVP path | Section 18 | Dev deployment and protected prod promotion | Smoke and rollback rehearsals | Infrastructure | Requires implementation |
@@ -1762,8 +1765,8 @@ decisions and identifies the validations or choices that remain open.
 9. **Selected:** application-managed role/environment/project-scoped API keys
    replace Cognito for the MVP. A production identity provider remains a future
    hardening path if real organizational users are introduced.
-10. **Selected:** seven synthetic workforce profiles and a structured Jira
-    `Workforce Employee ID` field model the team; two real synthetic Jira
+10. **Selected:** seven synthetic workforce profiles and the structured Jira
+    label convention `workforce-employee:EMP-00N` model the team; two real synthetic Jira
     accounts are used only for the controlled assignee-mutation demonstration.
 11. **Selected:** deterministic scenario progression is external test tooling
     executed from a workstation or `run-scenario.yml`. Kubernetes retains only
@@ -1775,10 +1778,12 @@ decisions and identifies the validations or choices that remain open.
 1. Prove unattended Jira MCP authentication with a dedicated,
    narrowly permissioned integration identity, including token rotation,
    CronJob compatibility, required tools, and project-scope enforcement.
-2. Decide whether to adopt temporary project `WRD` as the configured development
-   scope or create `WORKFORCE-DEV`; if creating the latter, repeat the approved
-   MCP discovery, structured-field, custom-field, account-resolution,
-   assignee-update, and read-back smoke tests.
+2. Confirm the selected `WRD` development scope remains accessible to the
+   dedicated integration identity and matches the exact mutation, seed, and
+   cleanup allowlists. If a verified limitation requires a replacement project,
+   repeat the approved MCP discovery, structured-field, custom-field,
+   account-resolution, assignee-update, and read-back smoke tests before
+   changing those allowlists.
 3. Validate Amazon Bedrock model access and regional availability in the
    selected AWS region, including IAM permissions and deterministic fallback.
 4. Select, pin, and compatibility-test Kubernetes, containerd, Calico,

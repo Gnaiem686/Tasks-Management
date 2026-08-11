@@ -1,0 +1,24 @@
+{
+  "employee_id": "EMP-002",
+  "environment": "dev",
+  "remaining_estimated_hours": 70,
+  "available_capacity_hours": 40,
+  "overdue_tasks": 4,
+  "blocked_or_blocking_tasks": 3,
+  "urgent_high_priority_tasks": 3,
+  "due_soon_tasks": 3,
+  "active_tasks": 8,
+  "concurrent_projects": 3,
+  "stale_tasks": 3,
+  "evidence_timestamp": "2026-08-06T10:00:00Z",
+  "evidence_references": {
+    "utilization": ["jira:WRD:remaining", "profile:EMP-002:capacity"],
+    "overdue_work": ["jira:jql:overdue"],
+    "blocked_work": ["jira:jql:blocked"],
+    "priority_load": ["jira:jql:priority"],
+    "due_soon_load": ["jira:jql:due-soon"],
+    "active_task_count": ["jira:jql:active"],
+    "concurrent_projects": ["jira:jql:projects"],
+    "stale_work": ["jira:jql:stale"]
+  }
+}
