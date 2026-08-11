@@ -19,7 +19,7 @@ jobs:
 
   deploy:
     needs: quality
-    if: vars.DEPLOYMENTS_ENABLED == 'true'
+    if: ${{ needs.quality.result == 'success' }}
     environment: dev
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -36,6 +36,10 @@ jobs:
       JIRA_MUTATION_ENABLED: "false"
 
     steps:
+      - name: Require deployment enablement
+        shell: bash
+        run: test "${{ vars.DEPLOYMENTS_ENABLED }}" = true
+
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
