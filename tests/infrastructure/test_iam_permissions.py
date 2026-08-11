@@ -83,6 +83,16 @@ def test_github_environment_deploy_roles_use_checksum_bundle_and_ssm_only() -> N
     assert '"kms:Decrypt"' in deployment
 
 
+def test_github_deploy_smoke_permissions_are_read_only_and_environment_scoped() -> None:
+    deployment = (TF_ROOT / "deployment.tf").read_text()
+    assert 'actions   = ["s3:ListBucket"]' in deployment
+    assert "aws_s3_bucket.reports[each.key].arn" in deployment
+    assert 'actions   = ["sqs:GetQueueAttributes"]' in deployment
+    assert "aws_sqs_queue.notifications[each.key].arn" in deployment
+    assert 'actions   = ["s3:PutObject"]' not in deployment
+    assert 'actions   = ["sqs:SendMessage"]' not in deployment
+
+
 def test_worker_nodes_can_pull_images_from_project_ecr_repositories() -> None:
     iam = (TF_ROOT / "iam.tf").read_text()
     terraform = _terraform()

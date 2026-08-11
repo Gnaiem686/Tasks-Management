@@ -80,6 +80,19 @@ data "aws_iam_policy_document" "github_deploy" {
     actions   = ["ssm:GetCommandInvocation", "ssm:ListCommandInvocations"]
     resources = ["*"]
   }
+  statement {
+    actions   = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.reports[each.key].arn]
+  }
+  statement {
+    actions   = ["sqs:GetQueueAttributes"]
+    resources = [aws_sqs_queue.notifications[each.key].arn]
+  }
+}
+
+moved {
+  from = aws_iam_role_policy.github_dev_deploy
+  to   = aws_iam_role_policy.github_deploy["dev"]
 }
 
 resource "aws_iam_role_policy" "github_deploy" {
