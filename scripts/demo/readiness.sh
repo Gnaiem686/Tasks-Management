@@ -24,4 +24,3 @@ if [[ -n "${BEDROCK_MODEL_ID:-}" ]]; then
 else
   echo "DEGRADED: Bedrock is not configured; deterministic fallback will be used"
 fi
-

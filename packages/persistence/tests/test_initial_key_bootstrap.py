@@ -18,4 +18,3 @@ def test_initial_manager_principal_is_scoped_and_never_stores_raw_key() -> None:
     assert principal.project_scopes == ["WRD"]
     assert principal.key_digest != raw_key
     assert raw_key not in repr(principal)
-

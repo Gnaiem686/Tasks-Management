@@ -35,4 +35,3 @@ done
 echo "Demo scan ${scan_id}: ${state}"
 echo "Jira: https://gnaiem686.atlassian.net/issues/?jql=project%20%3D%20WRD%20AND%20labels%20%3D%20%22workforce-scenario%3Aseven-person%3Av1%22"
 echo "Manager UI: ${API_BASE_URL}/"
-
