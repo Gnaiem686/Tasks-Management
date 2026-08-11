@@ -88,6 +88,19 @@ def test_dev_release_bootstraps_namespace_before_server_side_validation() -> Non
     )
 
 
+def test_dev_release_removes_terminal_migration_before_dry_run_replacement() -> None:
+    deploy_script = (ROOT / "scripts" / "deployment" / "deploy_release.sh").read_text()
+    delete_job = (
+        'kubectl -n "$RELEASE_NAMESPACE" delete job/database-migration --wait=true'
+    )
+    migration_validation = (
+        'kubectl apply --server-side --dry-run=server '
+        '-f "$RELEASE_DIRECTORY/migration.yaml"'
+    )
+
+    assert deploy_script.index(delete_job) < deploy_script.index(migration_validation)
+
+
 def test_dev_smoke_and_release_record_cover_required_evidence() -> None:
     smoke = (ROOT / "scripts" / "validation" / "smoke_dev.sh").read_text()
     release = (ROOT / "scripts" / "validation" / "record_release.sh").read_text()

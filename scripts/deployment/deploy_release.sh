@@ -9,7 +9,6 @@ kubectl create namespace "$RELEASE_NAMESPACE" --dry-run=client -o yaml \
   | kubectl apply --server-side -f -
 
 kubectl apply --server-side --dry-run=server -f "$RELEASE_DIRECTORY/foundation.yaml"
-kubectl apply --server-side --dry-run=server -f "$RELEASE_DIRECTORY/migration.yaml"
 kubectl apply --server-side --dry-run=server -f "$RELEASE_DIRECTORY/application.yaml"
 
 kubectl apply --server-side -f "$RELEASE_DIRECTORY/foundation.yaml"
@@ -26,6 +25,7 @@ if kubectl -n "$RELEASE_NAMESPACE" get job/database-migration >/dev/null 2>&1; t
   kubectl -n "$RELEASE_NAMESPACE" delete job/database-migration --wait=true
 fi
 
+kubectl apply --server-side --dry-run=server -f "$RELEASE_DIRECTORY/migration.yaml"
 kubectl apply --server-side -f "$RELEASE_DIRECTORY/migration.yaml"
 kubectl -n "$RELEASE_NAMESPACE" wait \
   --for=condition=complete job/database-migration --timeout=600s
