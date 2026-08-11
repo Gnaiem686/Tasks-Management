@@ -26,6 +26,8 @@ jobs:
       AGENT_API_BASE_URL: ${{ vars.DEV_AGENT_API_BASE_URL }}
       DEV_REPORT_BUCKET: ${{ vars.DEV_REPORT_BUCKET }}
       DEV_NOTIFICATION_QUEUE_URL: ${{ vars.DEV_NOTIFICATION_QUEUE_URL }}
+      DEV_APPLICATION_ROLE_ARN: ${{ vars.DEV_APPLICATION_ROLE_ARN }}
+      DEV_EXTERNAL_SECRETS_ROLE_ARN: ${{ vars.DEV_EXTERNAL_SECRETS_ROLE_ARN }}
       DEV_MANAGER_API_KEY: ${{ secrets.DEV_MANAGER_API_KEY }}
       JIRA_MUTATION_ENABLED: "false"
 
@@ -151,6 +153,16 @@ jobs:
               kustomize edit set image "registry.invalid/workforce-risk/$service=$reference")
           done
           kustomize build infra/kubernetes/overlays/dev > artifacts/kubernetes/dev-rendered.yaml
+          test -n "$DEV_APPLICATION_ROLE_ARN"
+          test -n "$DEV_EXTERNAL_SECRETS_ROLE_ARN"
+          sed -i "s|WORKFORCE_APPLICATION_ROLE_ARN|$DEV_APPLICATION_ROLE_ARN|g" \
+            artifacts/kubernetes/dev-rendered.yaml
+          sed -i "s|WORKFORCE_EXTERNAL_SECRETS_ROLE_ARN|$DEV_EXTERNAL_SECRETS_ROLE_ARN|g" \
+            artifacts/kubernetes/dev-rendered.yaml
+          if grep -q 'WORKFORCE_.*_ROLE_ARN' artifacts/kubernetes/dev-rendered.yaml; then
+            echo 'Unresolved workload role placeholder' >&2
+            exit 1
+          fi
           kubeconform -strict -exit-on-error -ignore-missing-schemas artifacts/kubernetes/dev-rendered.yaml
           uv run python -m scripts.deployment.split_manifests \
             artifacts/kubernetes/dev-rendered.yaml artifacts/deployment/release

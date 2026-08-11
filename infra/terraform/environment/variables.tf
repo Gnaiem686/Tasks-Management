@@ -117,13 +117,3 @@ variable "ses_identity_arn" {
   description = "Verified SES domain or email identity ARN; verification is an external gate."
   type        = string
 }
-
-variable "cluster_oidc_provider_arn" {
-  description = "IAM OIDC provider ARN for the kubeadm service-account issuer."
-  type        = string
-}
-
-variable "cluster_oidc_issuer_hostpath" {
-  description = "OIDC issuer without https://, used in trust-policy condition keys."
-  type        = string
-}

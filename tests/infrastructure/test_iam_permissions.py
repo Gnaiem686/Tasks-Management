@@ -17,6 +17,17 @@ def test_external_secrets_roles_are_namespace_and_service_account_scoped() -> No
     assert "resources = values(aws_secretsmanager_secret.environment)[*].arn" not in iam
 
 
+def test_self_managed_cluster_publishes_only_public_oidc_material() -> None:
+    oidc = (TF_ROOT / "oidc.tf").read_text()
+    assert 'aws_s3_bucket" "cluster_oidc"' in oidc
+    assert 'aws_iam_openid_connect_provider" "kubernetes"' in oidc
+    assert "/.well-known/openid-configuration" in oidc
+    assert "/openid/v1/jwks" in oidc
+    assert "s3:GetObject" in oidc
+    assert "s3:PutObject" not in oidc
+    assert "private" not in oidc.lower()
+
+
 def test_bedrock_permission_is_model_and_region_scoped() -> None:
     bedrock = (TF_ROOT / "bedrock.tf").read_text()
     assert "bedrock:InvokeModel" in bedrock
@@ -38,6 +49,7 @@ def test_application_roles_are_environment_specific() -> None:
     assert 'aws_iam_role" "application"' in terraform
     assert "for_each = local.environments" in terraform
     assert "system:serviceaccount:${each.key}:agent-api" in terraform
+    assert "system:serviceaccount:${each.key}:workforce-risk-mcp" in terraform
     assert "aws_s3_bucket.reports[each.key].arn" in terraform
     assert "aws_sqs_queue.notifications[each.key].arn" in terraform
 

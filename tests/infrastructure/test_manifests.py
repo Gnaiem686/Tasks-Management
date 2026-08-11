@@ -48,6 +48,16 @@ def test_deployments_have_probes_resources_and_distinct_service_accounts() -> No
     assert len(accounts) == 4
 
 
+def test_aws_workloads_use_projected_web_identity_not_static_credentials() -> None:
+    manifest = (K8S / "base" / "workloads.yaml").read_text()
+    assert "AWS_WEB_IDENTITY_TOKEN_FILE" in manifest
+    assert "WORKFORCE_APPLICATION_ROLE_ARN" in manifest
+    assert "audience: sts.amazonaws.com" in manifest
+    assert "serviceAccountToken:" in manifest
+    assert "AWS_ACCESS_KEY_ID" not in manifest
+    assert "AWS_SECRET_ACCESS_KEY" not in manifest
+
+
 def test_scan_cronjob_is_non_overlapping_and_bounded() -> None:
     docs = _documents(K8S / "base" / "workloads.yaml")
     cronjob = next(doc for doc in docs if doc["kind"] == "CronJob")

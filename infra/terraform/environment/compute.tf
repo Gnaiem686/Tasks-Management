@@ -11,6 +11,9 @@ locals {
     calico_version             = var.calico_version
     join_parameter_name        = aws_ssm_parameter.kubeadm_join.name
     join_token_ttl             = var.join_token_ttl
+    oidc_bucket                = aws_s3_bucket.cluster_oidc.id
+    oidc_issuer                = local.cluster_oidc_issuer
+    oidc_jwks_uri              = "${local.cluster_oidc_issuer}/openid/v1/jwks"
   }
 }
 
@@ -37,6 +40,11 @@ resource "aws_instance" "control_plane" {
 
   tags = { Name = "${var.project_name}-${var.environment}-control-plane", manage_via_ssm = "true" }
   lifecycle { replace_triggered_by = [terraform_data.node_generation] }
+  depends_on = [
+    aws_iam_role_policy.control_plane_join,
+    aws_iam_role_policy_attachment.control_plane_ssm_core,
+    aws_s3_bucket_policy.cluster_oidc_public_keys,
+  ]
 }
 
 resource "aws_instance" "worker" {
@@ -64,7 +72,11 @@ resource "aws_instance" "worker" {
   tags = { Name = "${var.project_name}-${var.environment}-worker-${count.index + 1}", manage_via_ssm = "true" }
   lifecycle { replace_triggered_by = [terraform_data.node_generation] }
 
-  depends_on = [aws_instance.control_plane]
+  depends_on = [
+    aws_instance.control_plane,
+    aws_iam_role_policy.worker_join,
+    aws_iam_role_policy_attachment.worker_ssm_core,
+  ]
 }
 
 output "control_plane_instance_id" {

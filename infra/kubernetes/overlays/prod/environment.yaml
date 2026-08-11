@@ -24,6 +24,7 @@ spec:
       auth:
         jwt:
           serviceAccountRef: {name: external-secrets}
+      role: WORKFORCE_EXTERNAL_SECRETS_ROLE_ARN
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler

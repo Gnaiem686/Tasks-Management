@@ -37,6 +37,13 @@ data "aws_iam_policy_document" "control_plane_join" {
     actions   = ["kms:Encrypt"]
     resources = [aws_kms_key.join_material.arn]
   }
+  statement {
+    actions = ["s3:PutObject"]
+    resources = [
+      "${aws_s3_bucket.cluster_oidc.arn}/.well-known/openid-configuration",
+      "${aws_s3_bucket.cluster_oidc.arn}/openid/v1/jwks",
+    ]
+  }
 }
 
 resource "aws_iam_role_policy" "control_plane_join" {

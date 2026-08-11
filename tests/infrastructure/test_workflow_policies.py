@@ -54,6 +54,10 @@ def test_dev_build_promotes_only_resolved_image_digests() -> None:
     assert ":latest" not in text
     assert 'repository="$ECR_REGISTRY/workforce-risk/$service"' in text
     assert '--repository-name "workforce-risk/$service"' in text
+    assert "DEV_APPLICATION_ROLE_ARN" in text
+    assert "DEV_EXTERNAL_SECRETS_ROLE_ARN" in text
+    assert "WORKFORCE_APPLICATION_ROLE_ARN" in text
+    assert "WORKFORCE_EXTERNAL_SECRETS_ROLE_ARN" in text
 
 
 def test_dev_release_stops_on_migration_and_rollout_failure() -> None:

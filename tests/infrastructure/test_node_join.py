@@ -47,6 +47,11 @@ def test_control_plane_publishes_minimal_join_material() -> None:
     assert "aws ssm put-parameter" in script
     assert "--type SecureString" in script
     assert "certificate-key" not in script
+    assert "service-account-issuer" in script
+    assert "service-account-jwks-uri" in script
+    assert 'kubectl get --raw /.well-known/openid-configuration' in script
+    assert 'kubectl get --raw /openid/v1/jwks' in script
+    assert "aws s3 cp" in script
 
 
 def test_worker_join_is_idempotent_bounded_and_observable() -> None:
@@ -68,6 +73,8 @@ def test_versions_are_explicit_and_replacement_is_supported() -> None:
     assert 'variable "calico_version"' in variables
     assert "validation {" in variables
     assert 'replace_triggered_by = [terraform_data.node_generation]' in compute
+    assert "aws_iam_role_policy.control_plane_join" in compute
+    assert "aws_iam_role_policy.worker_join" in compute
 
 
 def test_verification_script_checks_topology_and_parameter_cleanup() -> None:

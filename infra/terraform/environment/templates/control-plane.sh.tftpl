@@ -44,14 +44,49 @@ apt-get install -y \
 apt-mark hold kubelet kubeadm kubectl containerd
 
 PRIVATE_IP=$(hostname -I | awk '{print $1}')
-kubeadm init \
-  --apiserver-advertise-address "$PRIVATE_IP" \
-  --pod-network-cidr 192.168.0.0/16
+cat >/etc/kubernetes/kubeadm-config.yaml <<KUBEADM
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: "$PRIVATE_IP"
+---
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+kubernetesVersion: "v${kubernetes_version}"
+networking:
+  podSubnet: 192.168.0.0/16
+apiServer:
+  extraArgs:
+    - name: service-account-issuer
+      value: "${oidc_issuer}"
+    - name: service-account-jwks-uri
+      value: "${oidc_jwks_uri}"
+KUBEADM
+kubeadm init --config /etc/kubernetes/kubeadm-config.yaml
 
 export KUBECONFIG=/etc/kubernetes/admin.conf
 curl -fsSLo /tmp/calico.yaml \
   "https://raw.githubusercontent.com/projectcalico/calico/${calico_version}/manifests/calico.yaml"
 kubectl apply -f /tmp/calico.yaml
+
+mkdir -p /tmp/workforce-oidc/.well-known /tmp/workforce-oidc/openid/v1
+kubectl get --raw /.well-known/openid-configuration \
+  >/tmp/workforce-oidc/.well-known/openid-configuration
+kubectl get --raw /openid/v1/jwks >/tmp/workforce-oidc/openid/v1/jwks
+for attempt in $(seq 1 10); do
+  if aws s3 cp --region "${aws_region}" --content-type application/json \
+    /tmp/workforce-oidc/.well-known/openid-configuration \
+    "s3://${oidc_bucket}/.well-known/openid-configuration" && \
+    aws s3 cp --region "${aws_region}" --content-type application/json \
+    /tmp/workforce-oidc/openid/v1/jwks "s3://${oidc_bucket}/openid/v1/jwks"; then
+    break
+  fi
+  if [[ "$attempt" == 10 ]]; then
+    echo "Unable to publish Kubernetes OIDC discovery after bounded retries" >&2
+    exit 1
+  fi
+  sleep $((attempt * 3))
+done
 
 JOIN_COMMAND=$(kubeadm token create --ttl "${join_token_ttl}" --print-join-command)
 if [[ "$JOIN_COMMAND" != *"--discovery-token-ca-cert-hash sha256:"* ]]; then

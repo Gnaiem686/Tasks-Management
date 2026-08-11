@@ -16,18 +16,19 @@ data "aws_iam_policy_document" "workload_assume" {
     actions = ["sts:AssumeRoleWithWebIdentity"]
     principals {
       type        = "Federated"
-      identifiers = [var.cluster_oidc_provider_arn]
+      identifiers = [aws_iam_openid_connect_provider.kubernetes.arn]
     }
     condition {
       test     = "StringEquals"
-      variable = "${var.cluster_oidc_issuer_hostpath}:aud"
+      variable = "${local.cluster_oidc_hostpath}:aud"
       values   = ["sts.amazonaws.com"]
     }
     condition {
       test     = "ForAnyValue:StringEquals"
-      variable = "${var.cluster_oidc_issuer_hostpath}:sub"
+      variable = "${local.cluster_oidc_hostpath}:sub"
       values = [
         "system:serviceaccount:${each.key}:agent-api",
+        "system:serviceaccount:${each.key}:workforce-risk-mcp",
         "system:serviceaccount:${each.key}:notification-worker",
         "system:serviceaccount:${each.key}:report-worker",
       ]
@@ -47,16 +48,16 @@ data "aws_iam_policy_document" "external_secrets_assume" {
     actions = ["sts:AssumeRoleWithWebIdentity"]
     principals {
       type        = "Federated"
-      identifiers = [var.cluster_oidc_provider_arn]
+      identifiers = [aws_iam_openid_connect_provider.kubernetes.arn]
     }
     condition {
       test     = "StringEquals"
-      variable = "${var.cluster_oidc_issuer_hostpath}:aud"
+      variable = "${local.cluster_oidc_hostpath}:aud"
       values   = ["sts.amazonaws.com"]
     }
     condition {
       test     = "StringEquals"
-      variable = "${var.cluster_oidc_issuer_hostpath}:sub"
+      variable = "${local.cluster_oidc_hostpath}:sub"
       values   = ["system:serviceaccount:${each.key}:external-secrets"]
     }
   }

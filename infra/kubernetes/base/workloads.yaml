@@ -68,6 +68,11 @@ spec:
             - configMapRef: {name: shared-config}
             - configMapRef: {name: environment-config}
             - secretRef: {name: application-secrets}
+          env:
+            - {name: AWS_ROLE_ARN, value: WORKFORCE_APPLICATION_ROLE_ARN}
+            - {name: AWS_WEB_IDENTITY_TOKEN_FILE, value: /var/run/secrets/aws/token}
+          volumeMounts:
+            - {name: aws-web-identity, mountPath: /var/run/secrets/aws, readOnly: true}
           startupProbe:
             httpGet: {path: /health/startup, port: http}
             failureThreshold: 30
@@ -88,6 +93,11 @@ spec:
             readOnlyRootFilesystem: true
             runAsNonRoot: true
             capabilities: {drop: [ALL]}
+      volumes:
+        - name: aws-web-identity
+          projected:
+            sources:
+              - serviceAccountToken: {audience: sts.amazonaws.com, expirationSeconds: 3600, path: token}
       securityContext: {seccompProfile: {type: RuntimeDefault}}
 ---
 apiVersion: apps/v1
@@ -108,11 +118,21 @@ spec:
           envFrom:
             - configMapRef: {name: environment-config}
             - secretRef: {name: application-secrets}
+          env:
+            - {name: AWS_ROLE_ARN, value: WORKFORCE_APPLICATION_ROLE_ARN}
+            - {name: AWS_WEB_IDENTITY_TOKEN_FILE, value: /var/run/secrets/aws/token}
+          volumeMounts:
+            - {name: aws-web-identity, mountPath: /var/run/secrets/aws, readOnly: true}
           startupProbe: {tcpSocket: {port: mcp}, failureThreshold: 30, periodSeconds: 2}
           readinessProbe: {tcpSocket: {port: mcp}, periodSeconds: 5}
           livenessProbe: {tcpSocket: {port: mcp}, periodSeconds: 10}
           resources: {requests: {cpu: 200m, memory: 256Mi}, limits: {cpu: "1", memory: 768Mi}}
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, runAsNonRoot: true, capabilities: {drop: [ALL]}}
+      volumes:
+        - name: aws-web-identity
+          projected:
+            sources:
+              - serviceAccountToken: {audience: sts.amazonaws.com, expirationSeconds: 3600, path: token}
       securityContext: {seccompProfile: {type: RuntimeDefault}}
 ---
 apiVersion: apps/v1
@@ -157,6 +177,11 @@ spec:
           envFrom:
             - configMapRef: {name: environment-config}
             - secretRef: {name: application-secrets}
+          env:
+            - {name: AWS_ROLE_ARN, value: WORKFORCE_APPLICATION_ROLE_ARN}
+            - {name: AWS_WEB_IDENTITY_TOKEN_FILE, value: /var/run/secrets/aws/token}
+          volumeMounts:
+            - {name: aws-web-identity, mountPath: /var/run/secrets/aws, readOnly: true}
           startupProbe: {exec: {command: [sh, -c, "kill -0 1"]}, failureThreshold: 30, periodSeconds: 2}
           readinessProbe: {exec: {command: [sh, -c, "kill -0 1"]}, periodSeconds: 5}
           livenessProbe: {exec: {command: [sh, -c, "kill -0 1"]}, periodSeconds: 10}
@@ -164,6 +189,11 @@ spec:
             requests: {cpu: 100m, memory: 128Mi}
             limits: {cpu: 500m, memory: 384Mi}
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, runAsNonRoot: true, capabilities: {drop: [ALL]}}
+      volumes:
+        - name: aws-web-identity
+          projected:
+            sources:
+              - serviceAccountToken: {audience: sts.amazonaws.com, expirationSeconds: 3600, path: token}
       securityContext: {seccompProfile: {type: RuntimeDefault}}
 ---
 apiVersion: v1
@@ -222,8 +252,18 @@ spec:
           image: registry.invalid/workforce-risk/workforce-risk-mcp@sha256:0000000000000000000000000000000000000000000000000000000000000000
           command: [alembic, upgrade, head]
           envFrom: [{secretRef: {name: application-secrets}}]
+          env:
+            - {name: AWS_ROLE_ARN, value: WORKFORCE_APPLICATION_ROLE_ARN}
+            - {name: AWS_WEB_IDENTITY_TOKEN_FILE, value: /var/run/secrets/aws/token}
+          volumeMounts:
+            - {name: aws-web-identity, mountPath: /var/run/secrets/aws, readOnly: true}
           resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: 500m, memory: 512Mi}}
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, runAsNonRoot: true, capabilities: {drop: [ALL]}}
+      volumes:
+        - name: aws-web-identity
+          projected:
+            sources:
+              - serviceAccountToken: {audience: sts.amazonaws.com, expirationSeconds: 3600, path: token}
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -249,8 +289,18 @@ spec:
               envFrom:
                 - configMapRef: {name: environment-config}
                 - secretRef: {name: application-secrets}
+              env:
+                - {name: AWS_ROLE_ARN, value: WORKFORCE_APPLICATION_ROLE_ARN}
+                - {name: AWS_WEB_IDENTITY_TOKEN_FILE, value: /var/run/secrets/aws/token}
+              volumeMounts:
+                - {name: aws-web-identity, mountPath: /var/run/secrets/aws, readOnly: true}
               resources: {requests: {cpu: 200m, memory: 256Mi}, limits: {cpu: "1", memory: 768Mi}}
               securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, runAsNonRoot: true, capabilities: {drop: [ALL]}}
+          volumes:
+            - name: aws-web-identity
+              projected:
+                sources:
+                  - serviceAccountToken: {audience: sts.amazonaws.com, expirationSeconds: 3600, path: token}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
