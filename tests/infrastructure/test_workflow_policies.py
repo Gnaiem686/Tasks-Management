@@ -169,6 +169,12 @@ def test_dev_smoke_and_release_record_cover_required_evidence() -> None:
         assert field in release
 
 
+def test_dev_smoke_uses_a_concrete_utc_scan_window() -> None:
+    smoke = (ROOT / "scripts" / "validation" / "smoke_dev.sh").read_text()
+    assert "date -u +%F" in smoke
+    assert '"window":"daily"' not in smoke
+
+
 def test_workflow_publishes_summaries_and_retains_artifacts() -> None:
     text = _text("deploy-dev.yml")
     assert "GITHUB_STEP_SUMMARY" in text
