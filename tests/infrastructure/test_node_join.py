@@ -76,6 +76,13 @@ def test_versions_are_explicit_and_replacement_is_supported() -> None:
     assert "aws_iam_role_policy.control_plane_join" in compute
     assert "aws_iam_role_policy.worker_join" in compute
     assert "aws_route_table_association.private" in compute
+    assert 'aws_cli_version            = "2.27.41"' in compute
+    for template in ("control-plane.sh.tftpl", "worker.sh.tftpl"):
+        script = (TEMPLATES / template).read_text()
+        assert "awscli-exe-linux-x86_64-${aws_cli_version}.zip" in script
+        assert "${aws_cli_sha256}" in script
+        assert "sha256sum -c" in script
+        assert "apt-get install -y awscli" not in script
 
 
 def test_verification_script_checks_topology_and_parameter_cleanup() -> None:

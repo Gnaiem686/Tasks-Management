@@ -14,6 +14,8 @@ locals {
     oidc_bucket                = aws_s3_bucket.cluster_oidc.id
     oidc_issuer                = local.cluster_oidc_issuer
     oidc_jwks_uri              = "${local.cluster_oidc_issuer}/openid/v1/jwks"
+    aws_cli_version            = "2.27.41"
+    aws_cli_sha256             = "15daae6cc803984064e3d4be9cfd07c4ae8ea703633c0a0b67acc6e321f706a3"
   }
 }
 

@@ -24,7 +24,15 @@ SYSCTL
 sysctl --system
 
 apt-get update
-apt-get install -y apt-transport-https ca-certificates curl gpg awscli
+apt-get install -y apt-transport-https ca-certificates curl gpg unzip
+if ! aws --version 2>&1 | grep -q "aws-cli/${aws_cli_version}"; then
+  curl -fsSLo /tmp/awscliv2.zip \
+    "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${aws_cli_version}.zip"
+  echo "${aws_cli_sha256}  /tmp/awscliv2.zip" | sha256sum -c -
+  mkdir -p /var/tmp/workforce-aws-cli-install
+  unzip -qo /tmp/awscliv2.zip -d /var/tmp/workforce-aws-cli-install
+  /var/tmp/workforce-aws-cli-install/aws/install --update
+fi
 apt-get install -y "containerd=${containerd_version}"
 mkdir -p /etc/containerd
 containerd config default >/etc/containerd/config.toml
