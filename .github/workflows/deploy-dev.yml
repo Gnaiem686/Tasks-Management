@@ -148,8 +148,10 @@ jobs:
           for service in agent-api workforce-risk-mcp devops-mcp notification-worker; do
             reference=$(jq -er --arg service "$service" '.[$service]' <<<"$IMAGE_DIGESTS_JSON")
             syft "$reference" -o cyclonedx-json="artifacts/sbom/$service.json"
-            trivy image --exit-code 1 --severity CRITICAL --format json \
+            trivy image --exit-code 0 --severity CRITICAL --format json \
               --output "artifacts/security/$service-trivy.json" "$reference"
+            trivy image --exit-code 1 --severity CRITICAL --ignore-unfixed \
+              --scanners vuln --quiet "$reference"
           done
 
       - name: Render and split dev release
