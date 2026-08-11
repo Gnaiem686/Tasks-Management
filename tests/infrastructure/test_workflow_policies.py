@@ -27,7 +27,9 @@ def test_dev_deployment_is_guarded_and_serialized() -> None:
     text = _text("deploy-dev.yml")
     assert workflow["concurrency"]["group"] == "deploy-dev"
     assert workflow["concurrency"]["cancel-in-progress"] == "false"
-    assert workflow["jobs"]["deploy"]["if"] == "${{ needs.quality.result == 'success' }}"
+    assert (
+        workflow["jobs"]["deploy"]["if"] == "${{ needs.quality.result == 'success' }}"
+    )
     assert 'test "${{ vars.DEPLOYMENTS_ENABLED }}" = true' in text
     assert workflow["jobs"]["deploy"]["environment"] == "dev"
     assert workflow["permissions"]["id-token"] == "write"
