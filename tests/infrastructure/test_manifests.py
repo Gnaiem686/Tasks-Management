@@ -67,6 +67,25 @@ def test_aws_workloads_use_projected_web_identity_not_static_credentials() -> No
     assert "AWS_SECRET_ACCESS_KEY" not in manifest
 
 
+def test_external_secrets_service_account_uses_its_workload_role_directly() -> None:
+    docs = _documents(K8S / "base" / "workloads.yaml")
+    account = next(
+        doc
+        for doc in docs
+        if doc["kind"] == "ServiceAccount"
+        and doc["metadata"]["name"] == "external-secrets"
+    )
+    assert account["metadata"]["annotations"] == {
+        "eks.amazonaws.com/role-arn": "WORKFORCE_EXTERNAL_SECRETS_ROLE_ARN"
+    }
+
+    for environment in ("dev", "prod"):
+        documents = _documents(K8S / "overlays" / environment / "environment.yaml")
+        store = next(doc for doc in documents if doc["kind"] == "SecretStore")
+        provider = store["spec"]["provider"]["aws"]
+        assert "role" not in provider
+
+
 def test_scan_cronjob_is_non_overlapping_and_bounded() -> None:
     docs = _documents(K8S / "base" / "workloads.yaml")
     cronjob = next(doc for doc in docs if doc["kind"] == "CronJob")

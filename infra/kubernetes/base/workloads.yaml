@@ -25,7 +25,10 @@ metadata: {name: notification-worker}
 ---
 apiVersion: v1
 kind: ServiceAccount
-metadata: {name: external-secrets}
+metadata:
+  name: external-secrets
+  annotations:
+    eks.amazonaws.com/role-arn: WORKFORCE_EXTERNAL_SECRETS_ROLE_ARN
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
