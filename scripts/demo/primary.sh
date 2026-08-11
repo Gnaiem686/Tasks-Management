@@ -11,7 +11,7 @@ WINDOW="primary-demo-$(date -u +%Y%m%dT%H%M%SZ)"
 "${ROOT_DIR}/.venv/bin/python" "${ROOT_DIR}/scripts/jira/advance_scenario.py" \
   --scenario "${SCENARIO}" --live-mcp --step primary_demo
 "${ROOT_DIR}/.venv/bin/python" "${ROOT_DIR}/scripts/jira/verify_seed.py" \
-  --scenario "${SCENARIO}" --live-mcp
+  --scenario "${SCENARIO}" --live-mcp --step primary_demo
 
 response=$(curl --fail --silent --show-error \
   --request POST "${API_BASE_URL}/api/v1/scans?project_key=${PROJECT_KEY}" \

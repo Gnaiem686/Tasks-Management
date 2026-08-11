@@ -10,7 +10,9 @@ from pydantic import BaseModel
 from scripts.jira.scenario import FileScenarioStore, ScenarioDefinition
 
 
-def parser(description: str, *, step: bool = False) -> argparse.ArgumentParser:
+def parser(
+    description: str, *, step: bool = False, optional_step: bool = False
+) -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=description)
     result.add_argument("--scenario", type=Path, required=True)
     backend = result.add_mutually_exclusive_group(required=True)
@@ -22,6 +24,8 @@ def parser(description: str, *, step: bool = False) -> argparse.ArgumentParser:
     backend.add_argument("--live-mcp", action="store_true")
     if step:
         result.add_argument("--step", required=True)
+    elif optional_step:
+        result.add_argument("--step")
     return result
 
 
