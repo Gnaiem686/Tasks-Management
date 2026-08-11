@@ -143,6 +143,12 @@ def test_workflow_publishes_summaries_and_retains_artifacts() -> None:
     assert "if: always()" in text
 
 
+def test_ci_blocks_network_without_breaking_asyncio_event_loops() -> None:
+    text = _text("ci.yml")
+    assert "--disable-socket" in text
+    assert "--allow-unix-socket" in text
+
+
 def test_terraform_plan_and_apply_are_separate_and_serialized() -> None:
     plan = _text("terraform-plan.yml")
     apply = _text("terraform-apply.yml")

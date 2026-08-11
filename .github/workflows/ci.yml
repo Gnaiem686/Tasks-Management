@@ -54,6 +54,7 @@ jobs:
           uv run pytest
           -m "not integration and not e2e and not infrastructure and not performance"
           --disable-socket
+          --allow-unix-socket
           --junitxml=artifacts/tests/junit.xml
           --cov=domain
           --cov=packages

@@ -20,6 +20,7 @@ ROOT = Path(__file__).parents[2]
 
 
 @pytest.mark.contract
+@pytest.mark.integration
 def test_real_streamable_http_lists_only_read_tools_and_returns_evidence() -> None:
     async def exercise(port: int) -> None:
         async with (
@@ -87,6 +88,7 @@ def test_real_streamable_http_lists_only_read_tools_and_returns_evidence() -> No
 
 
 @pytest.mark.contract
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_transport_connection_failure_is_clear() -> None:
     port = allocate_port()
