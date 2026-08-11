@@ -108,9 +108,10 @@ aws ssm put-parameter \
   --overwrite \
   --value "$JOIN_COMMAND"
 
+AWS_CLI=$(command -v aws)
 systemd-run --unit workforce-expire-kubeadm-join \
   --on-active="${join_token_ttl}" \
-  /usr/bin/aws ssm delete-parameter \
+  "$AWS_CLI" ssm delete-parameter \
   --region "${aws_region}" \
   --name "${join_parameter_name}"
 echo "Control plane initialized and short-lived join material published"

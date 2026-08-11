@@ -81,6 +81,8 @@ def test_versions_are_explicit_and_replacement_is_supported() -> None:
     control_plane = (TEMPLATES / "control-plane.sh.tftpl").read_text()
     assert 'kubernetesVersion: "v${kubernetes_semver}"' in control_plane
     assert 'kubernetesVersion: "v${kubernetes_version}"' not in control_plane
+    assert "AWS_CLI=$(command -v aws)" in control_plane
+    assert "/usr/bin/aws ssm delete-parameter" not in control_plane
     for template in ("control-plane.sh.tftpl", "worker.sh.tftpl"):
         script = (TEMPLATES / template).read_text()
         assert "awscli-exe-linux-x86_64-${aws_cli_version}.zip" in script
