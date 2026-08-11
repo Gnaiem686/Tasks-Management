@@ -10,6 +10,40 @@ from agent_api.llm.bedrock import BedrockExplanationProvider
 from agent_api.llm.fallback import DeterministicFallbackProvider
 from agent_api.llm.protocol import ExplanationProvider
 
+EXPLANATION_TOOL_NAME = "submit_workforce_explanation"
+EXPLANATION_TOOL_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "properties": {
+        "summary": {"type": "string"},
+        "root_causes": {"type": "array", "items": {"type": "string"}},
+        "recommendations": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string"},
+                    "reason": {"type": "string"},
+                    "candidate_id": {"type": ["string", "null"]},
+                },
+                "required": ["action", "reason", "candidate_id"],
+            },
+        },
+        "citations": {"type": "array", "items": {"type": "string"}},
+        "score": {"type": "integer"},
+        "risk_level": {"type": "string"},
+        "uncertainties": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": [
+        "summary",
+        "root_causes",
+        "recommendations",
+        "citations",
+        "score",
+        "risk_level",
+        "uncertainties",
+    ],
+}
+
 
 def get_explanation_provider() -> ExplanationProvider:
     """Use Bedrock when explicitly configured and fail safely to rules otherwise."""
@@ -23,26 +57,49 @@ def get_explanation_provider() -> ExplanationProvider:
 
     async def invoke(system_prompt: str, payload: dict[str, object]) -> str:
         def call() -> str:
-            response = client.converse(
-                modelId=model_id,
-                system=[{"text": system_prompt}],
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
+            try:
+                response = client.converse(
+                    modelId=model_id,
+                    system=[{"text": system_prompt}],
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "text": (
+                                        "Explain this validated deterministic result. "
+                                        "Submit the answer with the required tool:\n"
+                                        + json.dumps(payload, sort_keys=True)
+                                    )
+                                }
+                            ],
+                        }
+                    ],
+                    toolConfig={
+                        "tools": [
                             {
-                                "text": (
-                                    "Explain this validated deterministic result and "
-                                    "return only JSON:\n"
-                                    + json.dumps(payload, sort_keys=True)
-                                )
+                                "toolSpec": {
+                                    "name": EXPLANATION_TOOL_NAME,
+                                    "description": (
+                                        "Submit a validated workforce-risk explanation"
+                                    ),
+                                    "inputSchema": {"json": EXPLANATION_TOOL_SCHEMA},
+                                }
                             }
                         ],
-                    }
-                ],
-                inferenceConfig={"temperature": 0, "maxTokens": 900},
-            )
-            return str(response["output"]["message"]["content"][0]["text"])
+                        "toolChoice": {"tool": {"name": EXPLANATION_TOOL_NAME}},
+                    },
+                    inferenceConfig={"temperature": 0, "maxTokens": 900},
+                )
+                content = response["output"]["message"]["content"]
+                tool_input = next(
+                    block["toolUse"]["input"]
+                    for block in content
+                    if block.get("toolUse", {}).get("name") == EXPLANATION_TOOL_NAME
+                )
+                return json.dumps(tool_input)
+            except Exception as error:
+                raise OSError("Bedrock explanation invocation failed") from error
 
         return await asyncio.to_thread(call)
 

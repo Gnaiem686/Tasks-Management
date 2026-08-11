@@ -8,7 +8,7 @@ from agent_api.llm.bedrock import BedrockExplanationProvider
 from agent_api.llm.factory import get_explanation_provider
 from agent_api.llm.fallback import DeterministicFallbackProvider
 from agent_api.llm.schemas import ExplanationRequest
-from workforce_risk.models import RiskResult
+from workforce_risk.models import ConfidenceLevel, RiskResult
 
 
 def test_explanation_provider_uses_fallback_without_bedrock_configuration(
@@ -36,6 +36,84 @@ def test_explanation_provider_selects_bedrock_when_model_is_configured(
     monkeypatch.setenv("BEDROCK_MODEL_ID", "test.model-v1")
     monkeypatch.setenv("AWS_REGION", "us-east-1")
     assert isinstance(get_explanation_provider(), BedrockExplanationProvider)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_factory_forces_typed_bedrock_tool_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class BedrockClientStub:
+        @staticmethod
+        def converse(**kwargs: object) -> dict[str, object]:
+            captured.update(kwargs)
+            return {
+                "output": {
+                    "message": {
+                        "content": [
+                            {
+                                "toolUse": {
+                                    "toolUseId": "tool-1",
+                                    "name": "submit_workforce_explanation",
+                                    "input": valid_payload(),
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+
+    class Boto3Stub:
+        @staticmethod
+        def client(service_name: str, *, region_name: str) -> BedrockClientStub:
+            assert service_name == "bedrock-runtime"
+            assert region_name == "us-east-1"
+            return BedrockClientStub()
+
+    monkeypatch.setattr(
+        "agent_api.llm.factory.importlib.import_module", lambda _name: Boto3Stub()
+    )
+    monkeypatch.setenv("BEDROCK_MODEL_ID", "amazon.nova-lite-v1:0")
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+
+    result = await get_explanation_provider().explain(request())
+
+    assert result.source == "bedrock"
+    tool_config = captured["toolConfig"]
+    assert isinstance(tool_config, dict)
+    assert tool_config["toolChoice"] == {
+        "tool": {"name": "submit_workforce_explanation"}
+    }
+    assert "outputConfig" not in captured
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_bedrock_skips_inference_for_insufficient_data() -> None:
+    called = False
+
+    async def invoke(_system: str, _payload: dict[str, object]) -> str:
+        nonlocal called
+        called = True
+        return json.dumps(valid_payload())
+
+    insufficient = request().model_copy(
+        update={
+            "risk": risk_result().model_copy(
+                update={
+                    "score": None,
+                    "level": None,
+                    "confidence": ConfidenceLevel.INSUFFICIENT_DATA,
+                }
+            )
+        }
+    )
+    result = await BedrockExplanationProvider(invoke=invoke).explain(insufficient)
+
+    assert result.source == "deterministic_fallback"
+    assert called is False
 
 
 def risk_result() -> RiskResult:
