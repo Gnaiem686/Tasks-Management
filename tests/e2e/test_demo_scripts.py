@@ -28,7 +28,14 @@ def test_automatic_demo_advances_ordered_verified_stages_safely() -> None:
     content = script("auto_demo.sh")
     positions = [
         content.index(stage)
-        for stage in ("balanced", "stalled", "blocked", "critical", "intervention", "recovery")
+        for stage in (
+            "balanced",
+            "stalled",
+            "blocked",
+            "critical",
+            "intervention",
+            "recovery",
+        )
     ]
     assert positions == sorted(positions)
     assert "DEMO_STAGE_SECONDS:-60" in content

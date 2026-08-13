@@ -59,9 +59,7 @@ def test_fixture_defines_complete_seven_employee_team() -> None:
 def test_verify_command_accepts_explicit_advanced_stage(tmp_path: Path) -> None:
     state = tmp_path / "scenario-state.json"
     common = ["--scenario", str(FIXTURE), "--state-file", str(state)]
-    subprocess.run(
-        [sys.executable, "scripts/jira/seed_dev.py", *common], check=True
-    )
+    subprocess.run([sys.executable, "scripts/jira/seed_dev.py", *common], check=True)
     subprocess.run(
         [
             sys.executable,
