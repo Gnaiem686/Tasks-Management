@@ -170,7 +170,7 @@ def test_dev_runtime_uses_release_supplied_aws_resources_and_bedrock() -> None:
     assert 'JIRA_EMPLOYEE_ISSUE_MAP: \'{"EMP-001":"WRD-2"' in dev_environment
     assert 'WORKFORCE_CAPACITY_MAP: \'{"EMP-001":40' in dev_environment
     assert (
-        "SCAN_EMPLOYEE_IDS: EMP-001,EMP-002,EMP-003,EMP-004,EMP-005,EMP-006,EMP-007"
+        "SCAN_EMPLOYEE_IDS: EMP-001,EMP-002,EMP-006,EMP-003,EMP-004,EMP-005,EMP-007"
         in dev_environment
     )
     workloads = (ROOT / "infra/kubernetes/base/workloads.yaml").read_text()
