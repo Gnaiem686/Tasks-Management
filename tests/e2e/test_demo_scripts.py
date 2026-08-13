@@ -22,3 +22,27 @@ def test_demo_readiness_requires_dev_only_credentials() -> None:
     assert "DEV_MANAGER_API_KEY" in content
     assert "APP_ENVIRONMENT:-dev" in content
     assert '"prod"' in content
+
+
+def test_automatic_demo_advances_ordered_verified_stages_safely() -> None:
+    content = script("auto_demo.sh")
+    positions = [
+        content.index(stage)
+        for stage in (
+            "balanced",
+            "stalled",
+            "blocked",
+            "critical",
+            "intervention",
+            "recovery",
+        )
+    ]
+    assert positions == sorted(positions)
+    assert "DEMO_STAGE_SECONDS:-60" in content
+    assert "readiness.sh" in content
+    assert "advance_scenario.py" in content
+    assert "verify_seed.py" in content
+    assert "--live-mcp" in content
+    assert "trap" in content
+    assert "INT TERM" in content
+    assert "set -euo pipefail" in content

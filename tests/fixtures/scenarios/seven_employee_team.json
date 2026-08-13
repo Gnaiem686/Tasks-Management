@@ -26,6 +26,11 @@
   ],
   "steps": [
     {"name":"balanced","issue_updates":{"primary-risk-task":{"remaining_hours":10,"blocker_category":null}},"expected_findings":["balanced_team"]},
+    {"name":"stalled","issue_updates":{"primary-risk-task":{"remaining_hours":22,"blocker_category":null}},"expected_findings":["stalled_work"]},
+    {"name":"blocked","issue_updates":{"primary-risk-task":{"remaining_hours":24,"blocker_category":"Need clarification"}},"expected_findings":["blocked_work"]},
+    {"name":"critical","issue_updates":{"primary-risk-task":{"remaining_hours":30,"due_offset_days":1,"blocker_category":"Need clarification"}},"expected_findings":["employee_overload","blocked_work"]},
+    {"name":"intervention","issue_updates":{"primary-risk-task":{"remaining_hours":18,"blocker_category":null,"senior_pairing_employee_id":"EMP-001"}},"expected_findings":["protective_pairing"]},
+    {"name":"recovery","issue_updates":{"primary-risk-task":{"remaining_hours":6,"due_offset_days":5,"blocker_category":null,"senior_pairing_employee_id":"EMP-001"}},"expected_findings":["risk_reduced"]},
     {"name":"overload_and_blocker","issue_updates":{"primary-risk-task":{"remaining_hours":30,"blocker_category":"Need clarification"}},"expected_findings":["employee_overload","blocked_work"]},
     {"name":"weak_fit","issue_updates":{"complex-migration":{"workforce_employee_id":"EMP-006","remaining_hours":30}},"expected_findings":["weak_task_fit"]},
     {"name":"paired_fit","issue_updates":{"complex-migration":{"senior_pairing_employee_id":"EMP-001"}},"expected_findings":["protective_pairing"]},
