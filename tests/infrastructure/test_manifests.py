@@ -166,7 +166,12 @@ def test_dev_runtime_uses_release_supplied_aws_resources_and_bedrock() -> None:
     assert "WORKFORCE_REPORT_BUCKET" in dev_environment
     assert "WORKFORCE_NOTIFICATION_QUEUE_URL" in dev_environment
     assert "BEDROCK_MODEL_ID: amazon.nova-lite-v1:0" in dev_environment
-    assert "EVIDENCE_MODE: fixture" in dev_environment
+    assert "EVIDENCE_MODE: jira" in dev_environment
+    assert 'JIRA_EMPLOYEE_ISSUE_MAP: \'{"EMP-001":"WRD-2"' in dev_environment
+    assert 'WORKFORCE_CAPACITY_MAP: \'{"EMP-001":40' in dev_environment
+    workloads = (ROOT / "infra/kubernetes/base/workloads.yaml").read_text()
+    assert "name: JIRA_MCP_AUTHORIZATION" in workloads
+    assert "key: ATLASSIAN_MCP_CREDENTIAL" in workloads
     assert "WORKFORCE_REPORT_BUCKET" in workflow
     assert "WORKFORCE_NOTIFICATION_QUEUE_URL" in workflow
 

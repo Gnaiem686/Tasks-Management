@@ -72,6 +72,11 @@ spec:
             - configMapRef: {name: environment-config}
             - secretRef: {name: application-secrets}
           env:
+            - name: JIRA_MCP_AUTHORIZATION
+              valueFrom:
+                secretKeyRef:
+                  name: application-secrets
+                  key: ATLASSIAN_MCP_CREDENTIAL
             - {name: AWS_ROLE_ARN, value: WORKFORCE_APPLICATION_ROLE_ARN}
             - {name: AWS_WEB_IDENTITY_TOKEN_FILE, value: /var/run/secrets/aws/token}
           volumeMounts:
