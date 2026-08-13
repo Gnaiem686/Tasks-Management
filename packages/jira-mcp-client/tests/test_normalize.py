@@ -72,6 +72,21 @@ def test_blocker_category_never_comes_from_prompt_like_free_text() -> None:
 
 
 @pytest.mark.unit
+def test_normalizes_empty_custom_field_as_none() -> None:
+    raw = load_response()
+    raw["data"]["fields"]["customfield_10042"] = None
+
+    evidence = normalize_issue(
+        raw,
+        expected_environment="dev",
+        expected_correlation_id="corr-wrd-1",
+        custom_fields={"blocker_category": "customfield_10042"},
+    )
+
+    assert evidence.custom_fields[0].value is None
+
+
+@pytest.mark.unit
 def test_normalizes_allowlisted_workforce_labels_as_structured_evidence() -> None:
     raw = load_response()
     fields = raw["data"]["fields"]
