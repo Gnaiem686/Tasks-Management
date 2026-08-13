@@ -53,8 +53,9 @@ class EmployeeOverloadScanPipeline:
                 employee_id, scope, correlation_id
             )
             degraded = degraded or bundle.degraded
+            tool_correlation_id = f"{correlation_id}:{employee_id}"
             result = RiskResult.model_validate(
-                await self._scoring.score(bundle.input, correlation_id)
+                await self._scoring.score(bundle.input, tool_correlation_id)
             )
             risk_id, alert_id = await self._sink.persist(
                 input_data=bundle.input,
