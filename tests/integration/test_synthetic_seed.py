@@ -54,6 +54,16 @@ def test_fixture_defines_complete_seven_employee_team() -> None:
         "primary_demo",
         "backup_demo",
     }
+    critical = next(step for step in scenario.steps if step.name == "critical")
+    assert set(critical.issue_updates) == {
+        "primary-risk-task",
+        "schema-change",
+        "complex-migration",
+    }
+    assert all(
+        update["workload_profile"] == "critical"
+        for update in critical.issue_updates.values()
+    )
 
 
 def test_verify_command_accepts_explicit_advanced_stage(tmp_path: Path) -> None:

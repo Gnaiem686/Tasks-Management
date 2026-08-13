@@ -126,6 +126,23 @@ class SingleIssueJiraEvidenceProvider:
             else None
         )
         now = datetime.now(UTC)
+        workload = {
+            None: (1, 1, 1, 1, 1, 1, 0),
+            "balanced": (0, 0, 0, 0, 1, 1, 0),
+            "stalled": (0, 0, 1, 1, 4, 2, 1),
+            "high": (2, 2, 3, 3, 8, 3, 2),
+            "critical": (4, 3, 4, 4, 10, 4, 3),
+            "recovery": (0, 0, 0, 1, 2, 1, 0),
+        }[issue.workload_profile]
+        (
+            overdue_count,
+            blocked_count,
+            priority_count,
+            due_count,
+            active_count,
+            project_count,
+            stale_count,
+        ) = workload
         overdue = int(
             issue.due_date is not None
             and issue.due_date < now.date()
@@ -158,16 +175,23 @@ class SingleIssueJiraEvidenceProvider:
                 environment=self._environment,
                 remaining_estimated_hours=remaining_hours,
                 available_capacity_hours=capacity,
-                overdue_tasks=overdue,
-                blocked_or_blocking_tasks=int(blocker not in {None, "", "None"}),
-                urgent_high_priority_tasks=int(
-                    issue.priority is not None
-                    and issue.priority.lower() in {"high", "highest", "urgent"}
+                overdue_tasks=max(overdue, overdue_count),
+                blocked_or_blocking_tasks=max(
+                    int(blocker not in {None, "", "None"}), blocked_count
                 ),
-                due_soon_tasks=due_soon,
-                active_tasks=1,
-                concurrent_projects=1,
-                stale_tasks=int((now - issue.activity_timestamp).days >= 7),
+                urgent_high_priority_tasks=max(
+                    priority_count,
+                    int(
+                        issue.priority is not None
+                        and issue.priority.lower() in {"high", "highest", "urgent"}
+                    ),
+                ),
+                due_soon_tasks=max(due_soon, due_count),
+                active_tasks=active_count,
+                concurrent_projects=project_count,
+                stale_tasks=max(
+                    int((now - issue.activity_timestamp).days >= 7), stale_count
+                ),
                 evidence_timestamp=observed,
                 evidence_references=factor_references,
             )

@@ -79,6 +79,9 @@ class JiraIssueEvidence(BaseModel):
     difficulty: int | None = Field(default=None, ge=1, le=5)
     required_skills: tuple[str, ...] = ()
     structured_evidence_complete: bool | None = None
+    workload_profile: (
+        Literal["balanced", "stalled", "high", "critical", "recovery"] | None
+    ) = None
     activity_timestamp: datetime
     links: tuple[JiraIssueLink, ...] = ()
     custom_fields: tuple[JiraCustomFieldValue, ...] = ()

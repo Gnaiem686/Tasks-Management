@@ -37,6 +37,7 @@ class ScenarioIssue(BaseModel):
         default=None, pattern=r"^EMP-00[1-7]$"
     )
     evidence_complete: bool = True
+    workload_profile: str | None = None
     labels: tuple[str, ...]
 
 

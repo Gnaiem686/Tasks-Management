@@ -218,6 +218,8 @@ def _jira_fields(
         if issue.evidence_complete
         else "workforce-evidence:incomplete"
     )
+    if issue.workload_profile is not None:
+        labels.append(f"workforce-workload-profile:{issue.workload_profile}")
     return {
         "labels": sorted(set(labels)),
         "priority": {"name": priority},
