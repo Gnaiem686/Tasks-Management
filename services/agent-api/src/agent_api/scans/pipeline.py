@@ -136,7 +136,14 @@ class DatabaseScanResultSink:
             await session.flush()
             alert_id: str | None = None
             if result.level is not None:
-                alert = await AlertRepository(session).record_risk(
+                alerts = AlertRepository(session)
+                if result.level.value == "low":
+                    await alerts.resolve_active_risk(
+                        environment=self._environment,
+                        subject_id=result.subject_id,
+                        risk_type="overload",
+                    )
+                alert = await alerts.record_risk(
                     environment=self._environment,
                     subject_id=result.subject_id,
                     risk_type="overload",
