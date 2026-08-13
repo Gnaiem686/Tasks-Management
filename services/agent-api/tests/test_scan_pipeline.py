@@ -32,9 +32,13 @@ class EvidenceProvider:
 
 
 class ScoringClient:
+    def __init__(self) -> None:
+        self.correlation_ids: list[str] = []
+
     async def score(
         self, input_data: EmployeeOverloadInput, correlation_id: str
     ) -> dict[str, Any]:
+        self.correlation_ids.append(correlation_id)
         return {
             "subject_id": input_data.employee_id,
             "environment": "test",
@@ -112,3 +116,23 @@ async def test_scan_pipeline_marks_partial_evidence_degraded() -> None:
     result = await pipeline.run(scope="WRD", correlation_id="corr-degraded")
 
     assert result.degraded is True
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_scan_pipeline_uses_unique_child_correlation_per_employee() -> None:
+    scoring = ScoringClient()
+    pipeline = EmployeeOverloadScanPipeline(
+        evidence=EvidenceProvider(),
+        scoring=scoring,
+        sink=Sink(),
+        employee_ids=("EMP-001", "EMP-002", "EMP-006"),
+    )
+
+    await pipeline.run(scope="WRD", correlation_id="corr-scan")
+
+    assert scoring.correlation_ids == [
+        "corr-scan:EMP-001",
+        "corr-scan:EMP-002",
+        "corr-scan:EMP-006",
+    ]
