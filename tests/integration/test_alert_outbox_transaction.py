@@ -156,3 +156,40 @@ async def test_dismissal_is_audited_and_etag_conflict_is_rejected() -> None:
             )
     finally:
         await database.close()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_low_risk_scan_resolves_active_alert() -> None:
+    database = Database(DATABASE_URL)
+    marker = f"resolve-{uuid.uuid4()}"
+    try:
+        async with database.transaction() as session:
+            risk_id = await create_risk(session, marker)
+            repository = AlertRepository(session)
+            recorded = await repository.record_risk(
+                environment="test",
+                subject_id=marker,
+                risk_type="overload",
+                scoring_window="2026-08-13",
+                risk_result_id=risk_id,
+                level=RiskLevel.CRITICAL,
+                evidence_fingerprint="critical-evidence",
+                correlation_id="corr-critical",
+                now=datetime.now(UTC),
+            )
+            assert recorded is not None
+            assert (
+                await repository.resolve_active_risk(
+                    environment="test", subject_id=marker, risk_type="overload"
+                )
+                == 1
+            )
+        async with database.transaction() as session:
+            alert = await session.scalar(
+                select(Alert).where(Alert.subject_id == marker)
+            )
+            assert alert is not None
+            assert alert.state == AlertState.RESOLVED.value
+    finally:
+        await database.close()

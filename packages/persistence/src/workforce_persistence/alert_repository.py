@@ -29,6 +29,27 @@ class AlertRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def resolve_active_risk(
+        self, *, environment: str, subject_id: str, risk_type: str
+    ) -> int:
+        result = await self._session.execute(
+            update(Alert)
+            .where(
+                Alert.environment == environment,
+                Alert.subject_id == subject_id,
+                Alert.risk_type == risk_type,
+                Alert.state.in_(
+                    [
+                        AlertState.NEW.value,
+                        AlertState.ACKNOWLEDGED.value,
+                        AlertState.INVESTIGATING.value,
+                    ]
+                ),
+            )
+            .values(state=AlertState.RESOLVED.value, version=Alert.version + 1)
+        )
+        return int(cast(CursorResult[Any], result).rowcount or 0)
+
     async def record_risk(
         self,
         *,
