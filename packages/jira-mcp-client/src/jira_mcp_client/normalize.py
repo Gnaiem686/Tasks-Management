@@ -182,14 +182,17 @@ def normalize_issue(
 
     normalized_custom: list[JiraCustomFieldValue] = []
     for logical_name, raw_id in custom_fields.items():
-        raw_value = _object(fields.get(raw_id), raw_id)
-        if "value" not in raw_value or isinstance(raw_value["value"], (dict, list)):
+        field_value = fields.get(raw_id)
+        raw_value = None if field_value is None else _object(field_value, raw_id)
+        if raw_value is not None and (
+            "value" not in raw_value or isinstance(raw_value["value"], (dict, list))
+        ):
             raise JiraNormalizationError(f"{raw_id} has an unsupported shape")
         normalized_custom.append(
             JiraCustomFieldValue(
                 logical_name=logical_name,
                 raw_field_id=raw_id,
-                value=raw_value["value"],
+                value=None if raw_value is None else raw_value["value"],
             )
         )
 
