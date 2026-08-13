@@ -42,6 +42,8 @@ def test_automatic_demo_advances_ordered_verified_stages_safely() -> None:
     assert "readiness.sh" in content
     assert "advance_scenario.py" in content
     assert "verify_seed.py" in content
+    assert "/api/v1/scans?project_key=WRD" in content
+    assert 'run_scan "${stage}"' in content
     assert "--live-mcp" in content
     assert "trap" in content
     assert "INT TERM" in content

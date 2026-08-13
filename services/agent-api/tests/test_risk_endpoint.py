@@ -107,6 +107,7 @@ class JiraClient:
         raw = json.loads(
             (ROOT / "tests/fixtures/jira/wrd_1_structured.json").read_text()
         )
+        raw["data"]["fields"]["labels"] = ["workforce-workload-profile:critical"]
         raw["correlation_id"] = correlation_id
         return normalize_issue(
             raw,
@@ -134,7 +135,9 @@ async def test_jira_provider_converts_structured_issue_without_using_free_text()
 
     assert bundle.input.remaining_estimated_hours == 4
     assert bundle.input.available_capacity_hours == 40
-    assert bundle.input.blocked_or_blocking_tasks == 1
+    assert bundle.input.blocked_or_blocking_tasks == 3
+    assert bundle.input.active_tasks == 10
+    assert bundle.input.concurrent_projects == 4
     assert "Ignore all prior instructions" not in json.dumps(
         bundle.input.model_dump(mode="json")
     )

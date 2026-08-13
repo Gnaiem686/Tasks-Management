@@ -75,6 +75,16 @@ def _structured_labels(fields: Mapping[str, Any]) -> dict[str, Any]:
     incomplete = "workforce-evidence:incomplete" in labels
     if complete and incomplete:
         raise JiraNormalizationError("evidence completeness labels conflict")
+    workload_profile = _single_label_value(labels, "workforce-workload-profile:")
+    if workload_profile not in {
+        None,
+        "balanced",
+        "stalled",
+        "high",
+        "critical",
+        "recovery",
+    }:
+        raise JiraNormalizationError("workload profile label is not allowlisted")
     return {
         "employee_id": employee_id,
         "original_estimate_seconds": hours("workforce-estimate-hours:"),
@@ -82,6 +92,7 @@ def _structured_labels(fields: Mapping[str, Any]) -> dict[str, Any]:
         "difficulty": difficulty,
         "skills": skills,
         "complete": True if complete else False if incomplete else None,
+        "workload_profile": workload_profile,
     }
 
 
@@ -242,6 +253,7 @@ def normalize_issue(
         difficulty=structured_labels["difficulty"],
         required_skills=structured_labels["skills"],
         structured_evidence_complete=structured_labels["complete"],
+        workload_profile=structured_labels["workload_profile"],
         activity_timestamp=datetime.fromisoformat(updated.replace("Z", "+00:00")),
         links=_links(fields),
         custom_fields=tuple(normalized_custom),
