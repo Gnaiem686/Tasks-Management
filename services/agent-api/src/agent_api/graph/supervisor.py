@@ -13,8 +13,15 @@ async def receive_verified_context(state: GraphState) -> dict[str, object]:
 
 
 async def classify_supported_intent(state: GraphState) -> dict[str, object]:
+    references = state["references"]
+    if references.employee_id is not None:
+        default_scope = "employee"
+    elif references.task_id is not None:
+        default_scope = "task"
+    else:
+        default_scope = "project"
     return {
-        "intent": classify_intent(state["question"]),
+        "intent": classify_intent(state["question"], default_scope=default_scope),
         "steps_used": state["steps_used"] + 1,
     }
 

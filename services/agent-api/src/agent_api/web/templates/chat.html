@@ -96,21 +96,6 @@
                 </dl>
                 <p id="degraded-warning" class="message warning" hidden></p>
                 <p id="freshness-warning" class="message warning" hidden></p>
-                <div class="table-scroll" tabindex="0" aria-label="Risk-factor table">
-                    <table id="factor-table">
-                        <caption>Contributing factors returned by the scoring service</caption>
-                        <thead>
-                            <tr>
-                                <th scope="col">Factor</th>
-                                <th scope="col">Value</th>
-                                <th scope="col">Weight</th>
-                                <th scope="col">Contribution</th>
-                            </tr>
-                        </thead>
-                        <tbody id="factor-rows">
-                        </tbody>
-                    </table>
-                </div>
             </section>
             <section class="panel" aria-labelledby="chat-title">
                 <h2 id="chat-title">Ask about the selected risk</h2>
@@ -129,13 +114,8 @@
                 <p id="chat-error" class="message error" aria-live="assertive" hidden></p>
                 <article id="chat-answer" class="chat-answer" aria-live="polite" hidden>
                     <h3>Answer</h3>
-                    <p id="answer-summary"></p>
-                    <h4>Contributors</h4>
-                    <ul id="answer-causes">
-                    </ul>
-                    <h4>Recommendations</h4>
-                    <ul id="answer-recommendations">
-                    </ul>
+                    <p><strong>Source:</strong> <span id="answer-source"></span></p>
+                    <p id="answer-text"></p>
                     <h4>Evidence references</h4>
                     <ul id="chat-citations">
                     </ul>

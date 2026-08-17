@@ -25,7 +25,7 @@ READ_ONLY_TOOL_ALLOWLISTS: dict[Intent, frozenset[str]] = {
 }
 
 
-def classify_intent(question: str) -> Intent:
+def classify_intent(question: str, *, default_scope: str | None = None) -> Intent:
     text = " ".join(question.lower().split())
     if any(word in text for word in ("approve", "execute", "change assignee")):
         return Intent.UNSUPPORTED
@@ -39,7 +39,10 @@ def classify_intent(question: str) -> Intent:
         word in text for word in ("unhealthy", "latency", "failed", "failure")
     ):
         return Intent.OPERATIONS_DIAGNOSIS
-    if any(word in text for word in ("develop", "prevent", "recurrence", "history")):
+    if (
+        any(word in text for word in ("develop", "prevent", "recurrence", "history"))
+        and default_scope is None
+    ):
         return Intent.EXPLAIN_HISTORY
     if "project" in text and any(word in text for word in ("risk", "late", "delay")):
         return Intent.EXPLAIN_PROJECT_RISK
@@ -47,4 +50,30 @@ def classify_intent(question: str) -> Intent:
         word in text for word in ("overload", "progress", "finish", "workload")
     ):
         return Intent.EXPLAIN_EMPLOYEE_OVERLOAD
+    work_terms = (
+        "employee",
+        "risk",
+        "score",
+        "factor",
+        "overdue",
+        "blocked",
+        "work",
+        "task",
+        "manager",
+        "evidence",
+        "result",
+        "missing",
+        "situation",
+        "improved",
+        "improvement",
+        "urgent",
+        "overload",
+        "prevent",
+    )
+    if default_scope == "employee" and any(term in text for term in work_terms):
+        return Intent.EXPLAIN_EMPLOYEE_OVERLOAD
+    if default_scope in {"project", "workflow"} and any(
+        term in text for term in work_terms
+    ):
+        return Intent.EXPLAIN_PROJECT_RISK
     return Intent.UNSUPPORTED

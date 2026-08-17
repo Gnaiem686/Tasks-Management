@@ -26,8 +26,8 @@ async def test_manager_page_has_keyboard_accessible_controls_and_live_regions() 
     assert 'type="submit"' in html
     assert 'aria-live="polite"' in html
     assert 'aria-live="assertive"' in html
-    assert 'id="factor-table"' in html
-    assert '<th scope="col">Factor</th>' in html
+    assert 'id="factor-table"' not in html
+    assert '<th scope="col">Weight</th>' not in html
 
 
 @pytest.mark.ui
@@ -39,7 +39,7 @@ def test_ui_client_renders_required_states_without_recomputing_scores() -> None:
     assert "result.confidence" in script
     assert "result.scoring_model_version" in script
     assert "result.evidence_timestamp" in script
-    assert "result.factors" in script
+    assert "renderFactors(result.factors)" not in script
     assert "insufficient-data" in script
     assert "Low risk" in script
     assert "High risk" in script

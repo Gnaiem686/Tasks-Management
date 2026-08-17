@@ -27,6 +27,7 @@ class DeterministicFallbackProvider:
         )
         uncertainties = tuple(f"Missing: {name}" for name in risk.missing_evidence)
         return ExplanationResponse(
+            answer=summary,
             summary=summary,
             root_causes=causes,
             recommendations=(

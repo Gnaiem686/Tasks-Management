@@ -129,7 +129,6 @@ function renderRisk(payload) {
     ? "? Insufficient data"
     : labels[result.level] || result.level;
   riskLabel.dataset.level = result.level || "insufficient-data";
-  renderFactors(result.factors);
 
   const degraded = document.querySelector("#degraded-warning");
   degraded.hidden = !payload.degraded;
@@ -157,14 +156,10 @@ function renderList(selector, values) {
 function renderAnswer(payload) {
   const explanation = payload.explanation;
   const guidance = payload.capability_guidance;
-  setText("#answer-summary", explanation ? explanation.summary : guidance);
-  renderList("#answer-causes", explanation ? explanation.root_causes : []);
-  renderList(
-    "#answer-recommendations",
-    explanation
-      ? explanation.recommendations.map((item) => `${item.action}: ${item.reason}`)
-      : [],
-  );
+  setText("#answer-text", explanation ? (explanation.answer || explanation.summary) : guidance);
+  setText("#answer-source", explanation
+    ? (explanation.source === "bedrock" ? "Amazon Bedrock" : "Deterministic fallback")
+    : "Capability guidance");
   renderList("#chat-citations", explanation ? explanation.citations : []);
   setText("#chat-correlation", payload.correlation_id || "unavailable");
   chatAnswer.hidden = false;
