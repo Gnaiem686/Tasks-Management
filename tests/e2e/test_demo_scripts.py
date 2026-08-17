@@ -22,6 +22,8 @@ def test_demo_readiness_requires_dev_only_credentials() -> None:
     assert "DEV_MANAGER_API_KEY" in content
     assert "APP_ENVIRONMENT:-dev" in content
     assert '"prod"' in content
+    assert "deployed Agent API" in content
+    assert "answer source" in content
 
 
 def test_automatic_demo_advances_ordered_verified_stages_safely() -> None:
@@ -48,3 +50,6 @@ def test_automatic_demo_advances_ordered_verified_stages_safely() -> None:
     assert "trap" in content
     assert "INT TERM" in content
     assert "set -euo pipefail" in content
+    assert "Scan failed" in content
+    assert "correlation" in content
+    assert "Scan timed out" in content

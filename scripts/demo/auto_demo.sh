@@ -8,21 +8,27 @@ JIRA_URL='https://gnaiem686.atlassian.net/issues/?jql=project%20%3D%20WRD'
 MANAGER_URL="${AGENT_DEV_URL:-http://127.0.0.1:8000}/"
 
 run_scan() {
-  local stage="$1" response scan_id state
+  local stage="$1" response scan_id state correlation status
   response=$(curl --fail --silent --show-error \
     --request POST "${AGENT_DEV_URL}/api/v1/scans?project_key=WRD" \
     --header "Authorization: Bearer ${DEV_MANAGER_API_KEY}" \
     --header "Content-Type: application/json" \
     --data "{\"scope\":\"WRD\",\"window\":\"demo-${stage}-$(date -u +%s)\"}")
   scan_id=$(jq -er '.scan_run_id' <<<"${response}")
+  correlation=$(jq -er '.correlation_id' <<<"${response}")
   for _ in {1..30}; do
-    state=$(curl --fail --silent --show-error \
+    status=$(curl --fail --silent --show-error \
       "${AGENT_DEV_URL}/api/v1/scans/${scan_id}?project_key=WRD" \
-      --header "Authorization: Bearer ${DEV_MANAGER_API_KEY}" | jq -er '.state')
+      --header "Authorization: Bearer ${DEV_MANAGER_API_KEY}")
+    state=$(jq -er '.state' <<<"${status}")
     [[ "${state}" =~ ^completed ]] && return 0
-    [[ "${state}" == failed ]] && return 1
+    if [[ "${state}" == failed ]]; then
+      echo "Scan failed at ${stage}; support correlation: ${correlation}" >&2
+      return 1
+    fi
     sleep 1
   done
+  echo "Scan timed out at ${stage}; support correlation: ${correlation}" >&2
   return 1
 }
 

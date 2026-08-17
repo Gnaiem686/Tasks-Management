@@ -25,6 +25,7 @@ class Recommendation(BaseModel):
 
 class ModelExplanation(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
+    answer: str | None = None
     summary: str
     root_causes: tuple[str, ...]
     recommendations: tuple[Recommendation, ...]

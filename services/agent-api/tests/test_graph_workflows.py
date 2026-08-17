@@ -88,6 +88,27 @@ def test_supported_intents_are_finite(question: str, expected: Intent) -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    "question",
+    [
+        "What is causing this employee's risk?",
+        "Which factors contribute most to the score?",
+        "Does this employee have overdue or blocked work?",
+        "How urgent is this risk?",
+        "What should the manager do first?",
+        "Should some tasks be reassigned?",
+        "How could we prevent this overload?",
+        "What evidence supports this conclusion?",
+        "Explain this result in simple words.",
+        "What information might be missing?",
+        "Has the employee's situation improved?",
+    ],
+)
+def test_employee_context_accepts_natural_risk_questions(question: str) -> None:
+    assert classify_intent(question, default_scope="employee") is not Intent.UNSUPPORTED
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_workflow_returns_typed_cited_result() -> None:
     tool = Tool()

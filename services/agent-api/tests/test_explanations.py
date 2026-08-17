@@ -159,6 +159,9 @@ def request() -> ExplanationRequest:
 
 def valid_payload() -> dict[str, object]:
     return {
+        "answer": (
+            "This employee is critically overloaded because work exceeds capacity."
+        ),
         "summary": "Work exceeds available capacity.",
         "root_causes": ["High utilization"],
         "recommendations": [
@@ -189,6 +192,7 @@ async def test_valid_output_preserves_score_and_uses_minimal_evidence() -> None:
     result = await BedrockExplanationProvider(invoke=invoke).explain(request())
 
     assert result.source == "bedrock"
+    assert result.answer.startswith("This employee")
     assert result.score == 88
     assert result.citations == ("jira:WRD-1",)
     assert captured["correlation_id"] == "corr-4-1"

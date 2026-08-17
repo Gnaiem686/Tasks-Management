@@ -17,9 +17,15 @@ for variable in ATLASSIAN_MCP_AUTHORIZATION DEV_MANAGER_API_KEY; do
 done
 
 curl --fail --silent --show-error "${API_BASE_URL}/health/ready" >/dev/null
-echo "READY: local Agent API"
+if [[ "${API_BASE_URL}" == http://127.0.0.1:* || "${API_BASE_URL}" == http://localhost:* ]]; then
+  echo "READY: local Agent API"
+else
+  echo "READY: deployed Agent API at ${API_BASE_URL}"
+fi
 echo "READY: guarded Jira MCP credentials for ${PROJECT_KEY}"
-if [[ -n "${BEDROCK_MODEL_ID:-}" ]]; then
+if [[ "${API_BASE_URL}" != http://127.0.0.1:* && "${API_BASE_URL}" != http://localhost:* ]]; then
+  echo "INFO: the deployed API answer source is shown in the Manager UI"
+elif [[ -n "${BEDROCK_MODEL_ID:-}" ]]; then
   echo "READY: Bedrock requested with model ${BEDROCK_MODEL_ID}"
 else
   echo "DEGRADED: Bedrock is not configured; deterministic fallback will be used"

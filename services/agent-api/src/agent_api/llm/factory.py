@@ -14,6 +14,7 @@ EXPLANATION_TOOL_NAME = "submit_workforce_explanation"
 EXPLANATION_TOOL_SCHEMA: dict[str, object] = {
     "type": "object",
     "properties": {
+        "answer": {"type": "string"},
         "summary": {"type": "string"},
         "root_causes": {"type": "array", "items": {"type": "string"}},
         "recommendations": {
@@ -34,6 +35,7 @@ EXPLANATION_TOOL_SCHEMA: dict[str, object] = {
         "uncertainties": {"type": "array", "items": {"type": "string"}},
     },
     "required": [
+        "answer",
         "summary",
         "root_causes",
         "recommendations",
