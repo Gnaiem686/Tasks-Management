@@ -192,6 +192,7 @@ async def test_valid_output_preserves_score_and_uses_minimal_evidence() -> None:
     result = await BedrockExplanationProvider(invoke=invoke).explain(request())
 
     assert result.source == "bedrock"
+    assert result.answer is not None
     assert result.answer.startswith("This employee")
     assert result.score == 88
     assert result.citations == ("jira:WRD-1",)
