@@ -182,8 +182,11 @@ def request() -> ExplanationRequest:
 def valid_payload() -> dict[str, object]:
     return {
         "answer": (
-            "This employee is critically overloaded because high utilization means "
-            "assigned work exceeds capacity."
+            "The overall risk is critical at 88/100. High utilization is the main "
+            "driver because assigned work exceeds available capacity, while overdue "
+            "work adds deadline pressure. Blocked work is absent, which limits an "
+            "additional source of risk. The manager should reduce active work first "
+            "and verify that capacity evidence is current."
         ),
         "summary": "Work exceeds available capacity.",
         "root_causes": ["High utilization"],
@@ -238,7 +241,7 @@ async def test_valid_output_preserves_score_and_uses_minimal_evidence() -> None:
 
     assert result.source == "bedrock"
     assert result.answer is not None
-    assert result.answer.startswith("This employee")
+    assert result.answer.startswith("The overall risk")
     assert result.score == 88
     assert result.citations == ("jira:WRD-1", "jira:WRD-1:duedate")
     assert captured["correlation_id"] == "corr-4-1"
@@ -312,6 +315,36 @@ async def test_detailed_factor_specific_answer_is_accepted() -> None:
 
     assert result.source == "bedrock"
     assert result.answer == answer
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_generic_first_answer_is_revised_on_bounded_second_attempt() -> None:
+    generic = (
+        "The employee's overload risk is low because the risk factors are "
+        "balanced by other factors. Utilization and overdue work contribute, "
+        "but other factors do not contribute."
+    )
+    detailed = (
+        "The overall risk is critical at 88/100. High utilization is the main "
+        "driver because assigned work exceeds capacity, while overdue work adds "
+        "deadline pressure. Blocked work is absent, which prevents the result "
+        "from increasing further. The manager should reduce active work first "
+        "and verify that capacity evidence is current."
+    )
+    calls: list[dict[str, object]] = []
+
+    async def invoke(_system: str, payload: dict[str, object]) -> str:
+        calls.append(payload.copy())
+        answer = generic if len(calls) == 1 else detailed
+        return json.dumps(valid_payload() | {"answer": answer})
+
+    result = await BedrockExplanationProvider(invoke=invoke).explain(request())
+
+    assert result.source == "bedrock"
+    assert result.answer == detailed
+    assert len(calls) == 2
+    assert "revision_required" in calls[1]
 
 
 @pytest.mark.unit
