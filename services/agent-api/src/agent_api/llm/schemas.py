@@ -48,12 +48,28 @@ def build_model_payload(request: ExplanationRequest) -> dict[str, object]:
         key=lambda factor: (-factor.contribution_points, factor.name),
     )
 
-    def guidance(factor: FactorContribution) -> dict[str, object]:
+    def guidance(
+        factor: FactorContribution,
+        *,
+        impact: str,
+    ) -> dict[str, object]:
         return {
             "name": factor.name,
             "direction": factor.direction,
+            "impact": impact,
             "evidence_references": list(factor.evidence_references),
         }
+
+    positive_factors = [
+        factor for factor in ordered_factors if factor.contribution_points > 0
+    ]
+    zero_factors = [
+        factor for factor in ordered_factors if factor.contribution_points == 0
+    ]
+    lowest_impact_factors = sorted(
+        risk.factors,
+        key=lambda factor: (factor.contribution_points, factor.name),
+    )[:4]
 
     return {
         "workflow": request.workflow,
@@ -74,15 +90,23 @@ def build_model_payload(request: ExplanationRequest) -> dict[str, object]:
             for factor in risk.factors
         ],
         "strongest_contributors": [
-            guidance(factor)
-            for factor in ordered_factors
-            if factor.contribution_points > 0
-        ][:4],
+            guidance(factor, impact="strongest_contribution")
+            for factor in positive_factors[:4]
+        ],
         "mitigating_factors": [
-            guidance(factor)
-            for factor in ordered_factors
-            if factor.contribution_points == 0
-        ][:4],
+            guidance(factor, impact="zero_contribution") for factor in zero_factors[:4]
+        ],
+        "lowest_impact_factors": [
+            guidance(
+                factor,
+                impact=(
+                    "zero_contribution"
+                    if factor.contribution_points == 0
+                    else "low_relative_contribution"
+                ),
+            )
+            for factor in lowest_impact_factors
+        ],
         "evidence_references": list(risk.evidence_references),
         "missing_evidence": list(risk.missing_evidence),
         "candidate_ids": list(request.candidate_ids),

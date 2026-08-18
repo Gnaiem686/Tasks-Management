@@ -25,8 +25,11 @@ score and risk level exactly. Cite only supplied references. Recommend only
 supplied candidates. Never approve or perform an external action. Answer the
 manager's exact question with a detailed, evidence-specific explanation in the
 answer field. Name the strongest supplied contributors and explain how they
-affect risk. When relevant, contrast them with supplied low- or zero-impact
-factors that limit the result. State missing evidence and give the first
+affect risk. Contrast them with the specifically supplied lowest-impact factors
+to explain why the overall result is not higher; never invent an unnamed
+offset. A low-relative-contribution factor still increases risk, but less than
+the strongest contributors. A zero-contribution factor does not currently add
+risk. State missing evidence and give the first
 practical management action. You may state the supplied overall score, but
 never expose numeric factor contributions or create additional scores. Do not
 use vague phrases such as "other factors"; name the specific supplied factors
@@ -90,7 +93,8 @@ class BedrockExplanationProvider:
                         "revision_required": (
                             "The previous response was rejected. Rewrite it in at "
                             "least three detailed sentences, name the supplied "
-                            "contributors and mitigating factors explicitly, and "
+                            "strongest contributors and lowest-impact factors "
+                            "explicitly, explain why the result is not higher, and "
                             "do not say 'other factors' or disclose factor points."
                         ),
                     }
