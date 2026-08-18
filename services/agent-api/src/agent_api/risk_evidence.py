@@ -98,9 +98,7 @@ class JiraRiskEvidenceProvider:
         )
         references = tuple(
             dict.fromkeys(
-                reference
-                for task in tasks
-                for reference in task.evidence_references
+                reference for task in tasks for reference in task.evidence_references
             )
         )
         observed_at = max(

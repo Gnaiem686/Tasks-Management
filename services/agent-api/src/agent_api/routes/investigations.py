@@ -40,6 +40,7 @@ from agent_api.graph.state import (
     VerifiedAgentContext,
 )
 from agent_api.graph.workflow import InvestigationWorkflow
+from agent_api.historical_evidence import DatabaseHistoricalEvidenceReader
 from agent_api.llm.factory import get_explanation_provider
 from agent_api.llm.protocol import ExplanationProvider
 from agent_api.task_queries import JiraTaskQueryTool, TaskQueryResult
@@ -221,6 +222,17 @@ async def investigate(
         task_query_tool=EvidenceBackedTaskQueryTool(evidence),
         dossier_tool=(
             evidence if isinstance(evidence, SingleIssueJiraEvidenceProvider) else None
+        ),
+        historical_tool=(
+            DatabaseHistoricalEvidenceReader(
+                Database(database_url),
+                environment=principal.environment,
+                today=lambda: datetime.now(
+                    ZoneInfo(os.getenv("BUSINESS_TIMEZONE", "Asia/Jerusalem"))
+                ).date(),
+            )
+            if (database_url := os.getenv("DATABASE_URL"))
+            else None
         ),
         explainer=explainer,
     )

@@ -39,8 +39,10 @@ async def test_search_requests_structured_work_situation_fields() -> None:
     )
 
     assert transport.arguments is not None
-    assert "timeestimate" in transport.arguments["fields"]
-    assert "customfield_10042" in transport.arguments["fields"]
+    fields = transport.arguments["fields"]
+    assert isinstance(fields, list)
+    assert "timeestimate" in fields
+    assert "customfield_10042" in fields
 
 
 @pytest.mark.unit

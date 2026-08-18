@@ -19,6 +19,7 @@ from agent_api.graph.supervisor import (
     receive_verified_context,
     route_after_classification,
 )
+from agent_api.historical_evidence import HistoricalRiskContext
 from agent_api.llm.protocol import ExplanationProvider
 from agent_api.llm.schemas import ExplanationRequest, ExplanationResponse
 from agent_api.risk_evidence import RiskEvidenceDossier
@@ -49,6 +50,16 @@ class RiskDossierTool(Protocol):
     ) -> RiskEvidenceDossier: ...
 
 
+class HistoricalEvidenceTool(Protocol):
+    async def get_at(
+        self,
+        question: str,
+        employee_id: str,
+        project_key: str,
+        correlation_id: str,
+    ) -> HistoricalRiskContext: ...
+
+
 class InvestigationWorkflow:
     def __init__(
         self,
@@ -56,6 +67,7 @@ class InvestigationWorkflow:
         tool: InvestigationTool,
         task_query_tool: TaskQueryTool | None = None,
         dossier_tool: RiskDossierTool | None = None,
+        historical_tool: HistoricalEvidenceTool | None = None,
         explainer: ExplanationProvider,
         max_steps: int = 6,
         max_tool_calls: int = 2,
@@ -64,6 +76,7 @@ class InvestigationWorkflow:
         self._tool = tool
         self._task_query_tool = task_query_tool
         self._dossier_tool = dossier_tool
+        self._historical_tool = historical_tool
         self._explainer = explainer
         self._max_steps = max_steps
         self._max_tool_calls = max_tool_calls
@@ -102,6 +115,26 @@ class InvestigationWorkflow:
                 "steps_used": state["steps_used"] + 1,
                 "tool_calls_used": state["tool_calls_used"] + 1,
             }
+        if state["intent"] is Intent.EXPLAIN_HISTORY:
+            if self._historical_tool is None or state["references"].employee_id is None:
+                raise ValueError("historical employee evidence is unavailable")
+            historical = await self._historical_tool.get_at(
+                state["question"],
+                state["references"].employee_id,
+                state["references"].project_key,
+                state["verified_context"].correlation_id,
+            )
+            historical_result: dict[str, object] = {
+                "risk": historical.risk,
+                "evidence_dossier": historical.dossier,
+                "steps_used": state["steps_used"] + 1,
+                "tool_calls_used": state["tool_calls_used"] + 1,
+            }
+            if historical.previous_dossier is not None:
+                historical_result["previous_evidence_dossier"] = (
+                    historical.previous_dossier
+                )
+            return historical_result
         risk = await self._tool.investigate(
             state["intent"],
             state["references"],
@@ -152,6 +185,7 @@ class InvestigationWorkflow:
                 question=state["question"],
                 risk=state["risk"],
                 evidence_dossier=state.get("evidence_dossier"),
+                previous_evidence_dossier=state.get("previous_evidence_dossier"),
                 correlation_id=state["verified_context"].correlation_id,
             )
         )

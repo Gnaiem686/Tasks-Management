@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 from workforce_risk.models import FactorContribution, RiskResult
 
+from agent_api.historical_evidence import compare_dossiers
 from agent_api.risk_evidence import RiskEvidenceDossier
 
 
@@ -14,6 +15,7 @@ class ExplanationRequest(BaseModel):
     question: str
     risk: RiskResult
     evidence_dossier: RiskEvidenceDossier | None = None
+    previous_evidence_dossier: RiskEvidenceDossier | None = None
     candidate_ids: tuple[str, ...] = ()
     untrusted_evidence: tuple[str, ...] = ()
     correlation_id: str
@@ -102,6 +104,11 @@ def build_model_payload(request: ExplanationRequest) -> dict[str, object]:
                 for task in dossier.tasks
             ],
         }
+    comparison = None
+    if dossier is not None and request.previous_evidence_dossier is not None:
+        comparison = compare_dossiers(
+            request.previous_evidence_dossier, dossier
+        ).model_dump(mode="json")
     return {
         "workflow": request.workflow,
         "question": request.question[:500],
@@ -141,6 +148,7 @@ def build_model_payload(request: ExplanationRequest) -> dict[str, object]:
         "evidence_references": list(risk.evidence_references),
         "missing_evidence": list(risk.missing_evidence),
         "work_situation": work_situation,
+        "historical_comparison": comparison,
         "candidate_ids": list(request.candidate_ids),
         "correlation_id": request.correlation_id,
     }

@@ -29,6 +29,8 @@ name the relevant task keys and summaries, their status and priority, exact due
 dates, remaining hours, blockers and dependencies, and compare total remaining
 hours with available capacity. Lead with urgency and give the manager's first
 practical action. Do not invent a task fact that is absent from work_situation.
+When historical_comparison is supplied, state the earlier and later observation
+times and explain the exact workload, task, and blocker changes.
 Name the strongest supplied contributors and explain how they
 affect risk. Contrast them with the specifically supplied lowest-impact factors
 to explain why the overall result is not higher; never invent an unnamed
@@ -146,6 +148,10 @@ class BedrockExplanationProvider:
         allowed_citations = set(request.risk.evidence_references)
         if request.evidence_dossier is not None:
             allowed_citations.update(request.evidence_dossier.evidence_references)
+        if request.previous_evidence_dossier is not None:
+            allowed_citations.update(
+                request.previous_evidence_dossier.evidence_references
+            )
         if not set(result.citations).issubset(allowed_citations):
             raise ValueError("model cited unknown evidence")
         candidate_ids = {
@@ -164,6 +170,17 @@ class BedrockExplanationProvider:
         if re.search(r"\b\d+(?:\.\d+)?\s+(?:contribution\s+)?points?\b", answer):
             raise ValueError("model exposed numeric factor contributions")
         answer_folded = answer.casefold()
+        if request.evidence_dossier is not None:
+            known_tasks = {task.key for task in request.evidence_dossier.tasks}
+            if request.previous_evidence_dossier is not None:
+                known_tasks.update(
+                    task.key for task in request.previous_evidence_dossier.tasks
+                )
+            mentioned_tasks = set(
+                re.findall(r"\b[A-Z][A-Z0-9]{1,19}-\d+\b", answer.upper())
+            )
+            if not mentioned_tasks.issubset(known_tasks):
+                raise ValueError("model invented Jira task evidence")
         factor_terms = {
             term
             for factor in request.risk.factors

@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 from agent_api.dependencies import EvidenceBundle
+from agent_api.risk_evidence import RiskEvidenceDossier
 from agent_api.scans.pipeline import EmployeeOverloadScanPipeline
 from workforce_risk.models import EmployeeOverloadInput, RiskResult
 
@@ -58,17 +59,26 @@ class ScoringClient:
 
 class Sink:
     def __init__(self) -> None:
-        self.calls: list[tuple[EmployeeOverloadInput, RiskResult, str, str]] = []
+        self.calls: list[
+            tuple[
+                EmployeeOverloadInput,
+                RiskResult,
+                RiskEvidenceDossier | None,
+                str,
+                str,
+            ]
+        ] = []
 
     async def persist(
         self,
         *,
         input_data: EmployeeOverloadInput,
         result: RiskResult,
+        evidence_dossier: RiskEvidenceDossier | None,
         scope: str,
         correlation_id: str,
     ) -> tuple[str, str]:
-        self.calls.append((input_data, result, scope, correlation_id))
+        self.calls.append((input_data, result, evidence_dossier, scope, correlation_id))
         return "risk-1", "alert-1"
 
 
@@ -89,7 +99,47 @@ async def test_scan_pipeline_scores_and_persists_configured_employees() -> None:
     assert result.risk_result_ids == ("risk-1",)
     assert result.alert_ids == ("alert-1",)
     assert result.report_id is None
-    assert sink.calls[0][2:] == ("WRD", "corr-demo")
+    assert sink.calls[0][3:] == ("WRD", "corr-demo")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_scan_persists_immutable_task_dossier_when_available() -> None:
+    class DossierEvidence(EvidenceProvider):
+        async def get_employee_overload(
+            self, employee_id: str, project_key: str, correlation_id: str
+        ) -> EvidenceBundle:
+            bundle = await super().get_employee_overload(
+                employee_id, project_key, correlation_id
+            )
+            return bundle.model_copy(
+                update={
+                    "evidence_dossier": RiskEvidenceDossier(
+                        employee_id=employee_id,
+                        project_key=project_key,
+                        observed_at=datetime(2026, 8, 18, 10, tzinfo=UTC),
+                        available_capacity_hours=40,
+                        total_remaining_hours=72,
+                        tasks=(),
+                        overdue_task_keys=("WRD-4",),
+                        due_soon_task_keys=("WRD-6",),
+                        blocked_task_keys=("WRD-6",),
+                        missing_evidence=(),
+                        evidence_references=("jira:WRD-4:duedate",),
+                    )
+                }
+            )
+
+    sink = Sink()
+    await EmployeeOverloadScanPipeline(
+        evidence=DossierEvidence(),
+        scoring=ScoringClient(),
+        sink=sink,
+        employee_ids=("EMP-003",),
+    ).run(scope="WRD", correlation_id="corr-history")
+
+    assert sink.calls[0][2] is not None
+    assert sink.calls[0][2].total_remaining_hours == 72
 
 
 @pytest.mark.unit

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from agent_api.historical_evidence import compare_dossiers
 from agent_api.llm.schemas import (
     ExplanationRequest,
     ExplanationResponse,
@@ -22,6 +23,26 @@ class DeterministicFallbackProvider:
         dossier = request.evidence_dossier
         if dossier is not None:
             details: list[str] = []
+            previous = request.previous_evidence_dossier
+            if previous is not None:
+                comparison = compare_dossiers(previous, dossier)
+                if comparison.remaining_hours_change is not None:
+                    direction = (
+                        "decreased"
+                        if comparison.remaining_hours_change < 0
+                        else "increased"
+                    )
+                    details.append(
+                        f"Remaining work {direction} by "
+                        f"{abs(comparison.remaining_hours_change):.1f} hours between "
+                        f"{comparison.earlier_observed_at.date().isoformat()} and "
+                        f"{comparison.later_observed_at.date().isoformat()}."
+                    )
+                if comparison.resolved_blocker_task_keys:
+                    details.append(
+                        ", ".join(comparison.resolved_blocker_task_keys)
+                        + " was unblocked."
+                    )
             if dossier.total_remaining_hours is not None:
                 details.append(
                     f"The employee has {dossier.total_remaining_hours:.1f} remaining "

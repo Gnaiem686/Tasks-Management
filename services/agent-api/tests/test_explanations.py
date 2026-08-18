@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 from agent_api.llm.bedrock import BedrockExplanationProvider
@@ -184,7 +184,7 @@ def dossier() -> RiskEvidenceDossier:
     return RiskEvidenceDossier(
         employee_id="EMP-002",
         project_key="WRD",
-        observed_at="2026-08-18T10:00:00Z",
+        observed_at=datetime(2026, 8, 18, 10, tzinfo=UTC),
         available_capacity_hours=40,
         total_remaining_hours=72,
         tasks=(
@@ -193,11 +193,11 @@ def dossier() -> RiskEvidenceDossier:
                 summary="Build manager result view",
                 status="In Progress",
                 priority="High",
-                due_date="2026-08-17",
+                due_date=date(2026, 8, 17),
                 remaining_hours=12,
                 blocker_category=None,
                 dependencies=("blocks: WRD-3",),
-                last_activity_at="2026-08-17T09:00:00Z",
+                last_activity_at=datetime(2026, 8, 17, 9, tzinfo=UTC),
                 evidence_references=("jira:WRD-4:duedate",),
             ),
             TaskSituation(
@@ -205,11 +205,11 @@ def dossier() -> RiskEvidenceDossier:
                 summary="Add audit schema",
                 status="Blocked",
                 priority="Highest",
-                due_date="2026-08-19",
+                due_date=date(2026, 8, 19),
                 remaining_hours=60,
                 blocker_category="Needs manager review",
                 dependencies=("is blocked by: WRD-9",),
-                last_activity_at="2026-08-18T08:00:00Z",
+                last_activity_at=datetime(2026, 8, 18, 8, tzinfo=UTC),
                 evidence_references=("jira:WRD-6:duedate",),
             ),
         ),
@@ -227,9 +227,12 @@ def test_model_payload_contains_allowlisted_task_situation() -> None:
     )
 
     situation = payload["work_situation"]
+    assert isinstance(situation, dict)
     assert situation["total_remaining_hours"] == 72
     assert situation["available_capacity_hours"] == 40
-    assert situation["tasks"][1] == {
+    tasks = situation["tasks"]
+    assert isinstance(tasks, list)
+    assert tasks[1] == {
         "key": "WRD-6",
         "summary": "Add audit schema",
         "status": "Blocked",
@@ -240,6 +243,55 @@ def test_model_payload_contains_allowlisted_task_situation() -> None:
         "dependencies": ["is blocked by: WRD-9"],
         "last_activity_at": "2026-08-18T08:00:00Z",
     }
+
+
+def test_model_payload_compares_historical_dossiers() -> None:
+    earlier = dossier()
+    later = dossier().model_copy(
+        update={
+            "observed_at": datetime(2026, 8, 20, 10, tzinfo=UTC),
+            "total_remaining_hours": 48,
+            "blocked_task_keys": (),
+        }
+    )
+    payload = build_model_payload(
+        request().model_copy(
+            update={
+                "evidence_dossier": later,
+                "previous_evidence_dossier": earlier,
+            }
+        )
+    )
+
+    comparison = payload["historical_comparison"]
+    assert isinstance(comparison, dict)
+    assert comparison["remaining_hours_change"] == -24
+    assert comparison["resolved_blocker_task_keys"] == ["WRD-6"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_fallback_explains_historical_improvement() -> None:
+    earlier = dossier()
+    later = dossier().model_copy(
+        update={
+            "observed_at": datetime(2026, 8, 20, 10, tzinfo=UTC),
+            "total_remaining_hours": 48,
+            "blocked_task_keys": (),
+        }
+    )
+    result = await DeterministicFallbackProvider().explain(
+        request().model_copy(
+            update={
+                "evidence_dossier": later,
+                "previous_evidence_dossier": earlier,
+            }
+        )
+    )
+
+    assert result.answer is not None
+    assert "decreased by 24.0 hours" in result.answer
+    assert "WRD-6 was unblocked" in result.answer
 
 
 @pytest.mark.unit
@@ -254,6 +306,27 @@ async def test_fallback_explains_concrete_task_situation() -> None:
     assert "40.0 available hours" in result.answer
     assert "WRD-4" in result.answer and "overdue since 2026-08-17" in result.answer
     assert "WRD-6" in result.answer and "Needs manager review" in result.answer
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_bedrock_cannot_invent_task_in_concrete_situation() -> None:
+    invented = valid_payload() | {
+        "answer": (
+            "The overall risk is critical at 88/100 because utilization and "
+            "overdue work are high. WRD-99 is overdue and blocked, while blocked "
+            "work otherwise remains limited. The manager should review it today."
+        )
+    }
+
+    async def invoke(_system: str, _payload: dict[str, object]) -> str:
+        return json.dumps(invented)
+
+    result = await BedrockExplanationProvider(invoke=invoke, max_attempts=1).explain(
+        request().model_copy(update={"evidence_dossier": dossier()})
+    )
+
+    assert result.source == "deterministic_fallback"
 
 
 def valid_payload() -> dict[str, object]:

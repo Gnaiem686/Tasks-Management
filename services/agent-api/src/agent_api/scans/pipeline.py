@@ -13,6 +13,7 @@ from workforce_risk.models import EmployeeOverloadInput, RiskResult
 from workforce_risk.scans.service import PipelineResult
 
 from agent_api.dependencies import EmployeeEvidenceProvider, WorkforceScoringClient
+from agent_api.risk_evidence import RiskEvidenceDossier
 
 
 class ScanResultSink(Protocol):
@@ -21,6 +22,7 @@ class ScanResultSink(Protocol):
         *,
         input_data: EmployeeOverloadInput,
         result: RiskResult,
+        evidence_dossier: RiskEvidenceDossier | None,
         scope: str,
         correlation_id: str,
     ) -> tuple[str, str | None]: ...
@@ -60,6 +62,7 @@ class EmployeeOverloadScanPipeline:
             risk_id, alert_id = await self._sink.persist(
                 input_data=bundle.input,
                 result=result,
+                evidence_dossier=bundle.evidence_dossier,
                 scope=scope,
                 correlation_id=correlation_id,
             )
@@ -84,6 +87,7 @@ class DatabaseScanResultSink:
         *,
         input_data: EmployeeOverloadInput,
         result: RiskResult,
+        evidence_dossier: RiskEvidenceDossier | None,
         scope: str,
         correlation_id: str,
     ) -> tuple[str, str | None]:
@@ -94,6 +98,8 @@ class DatabaseScanResultSink:
             raise ValueError("scan result environment mismatch")
         now = datetime.now(UTC)
         material = input_data.model_dump_json(exclude={"evidence_timestamp"})
+        if evidence_dossier is not None:
+            material += evidence_dossier.model_dump_json(exclude={"observed_at"})
         fingerprint = hashlib.sha256(material.encode()).hexdigest()
         async with self._database.transaction() as session:
             snapshot = await session.scalar(
@@ -112,7 +118,14 @@ class DatabaseScanResultSink:
                     subject_type="employee",
                     subject_id=result.subject_id,
                     fingerprint=fingerprint,
-                    evidence=input_data.model_dump(mode="json"),
+                    evidence={
+                        "score_input": input_data.model_dump(mode="json"),
+                        "risk_evidence_dossier": (
+                            evidence_dossier.model_dump(mode="json")
+                            if evidence_dossier is not None
+                            else None
+                        ),
+                    },
                     observed_at=input_data.evidence_timestamp,
                 )
                 session.add(snapshot)

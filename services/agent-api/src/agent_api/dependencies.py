@@ -29,6 +29,7 @@ class WorkforceMcpInvalidResponse(ValueError):
 class EvidenceBundle(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     input: EmployeeOverloadInput
+    evidence_dossier: RiskEvidenceDossier | None = None
     degraded: bool = False
     missing_sources: tuple[str, ...] = ()
 
@@ -188,6 +189,9 @@ class SingleIssueJiraEvidenceProvider:
                 "stale_work",
             )
         }
+        dossier = await self.get_current_dossier(
+            employee_id, project_key, correlation_id
+        )
         return EvidenceBundle(
             input=EmployeeOverloadInput(
                 employee_id=employee_id,
@@ -213,7 +217,8 @@ class SingleIssueJiraEvidenceProvider:
                 ),
                 evidence_timestamp=observed,
                 evidence_references=factor_references,
-            )
+            ),
+            evidence_dossier=dossier,
         )
 
 

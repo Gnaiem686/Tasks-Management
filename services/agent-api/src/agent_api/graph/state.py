@@ -42,6 +42,7 @@ class GraphState(TypedDict):
     intent: NotRequired[Intent]
     risk: NotRequired[RiskResult]
     evidence_dossier: NotRequired[RiskEvidenceDossier]
+    previous_evidence_dossier: NotRequired[RiskEvidenceDossier]
     task_query_result: NotRequired[TaskQueryResult]
     explanation: NotRequired[ExplanationResponse]
     capability_guidance: NotRequired[str]
