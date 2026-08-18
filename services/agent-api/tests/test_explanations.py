@@ -345,6 +345,35 @@ async def test_detailed_factor_specific_answer_is_accepted() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_specific_two_sentence_answer_clears_subject_candidate() -> None:
+    answer = (
+        "The risk is low because blocked work, utilization, and overdue work are "
+        "balanced by other factors with lower impact. Specifically, active task "
+        "count, concurrent projects, and stale work contribute less to the result."
+    )
+    payload = valid_payload() | {
+        "answer": answer,
+        "recommendations": [
+            {
+                "action": "monitor",
+                "reason": "Review the employee's current workload.",
+                "candidate_id": "EMP-002",
+            }
+        ],
+    }
+
+    async def invoke(_system: str, _payload: dict[str, object]) -> str:
+        return json.dumps(payload)
+
+    result = await BedrockExplanationProvider(invoke=invoke).explain(request())
+
+    assert result.source == "bedrock"
+    assert result.answer == answer
+    assert result.recommendations[0].candidate_id is None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_generic_first_answer_is_revised_on_bounded_second_attempt() -> None:
     generic = (
         "The employee's overload risk is low because the risk factors are "
@@ -371,6 +400,32 @@ async def test_generic_first_answer_is_revised_on_bounded_second_attempt() -> No
     assert result.answer == detailed
     assert len(calls) == 2
     assert "revision_required" in calls[1]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_invented_candidate_retry_requires_null_candidate_id() -> None:
+    calls: list[dict[str, object]] = []
+    invented = valid_payload() | {
+        "recommendations": [
+            {
+                "action": "monitor",
+                "reason": "Review current workload.",
+                "candidate_id": "EMP-999",
+            }
+        ]
+    }
+
+    async def invoke(_system: str, payload: dict[str, object]) -> str:
+        calls.append(payload.copy())
+        if len(calls) == 1:
+            return json.dumps(invented)
+        return json.dumps(valid_payload())
+
+    result = await BedrockExplanationProvider(invoke=invoke).explain(request())
+
+    assert result.source == "bedrock"
+    assert "candidate_id must be null" in str(calls[1]["revision_required"])
 
 
 @pytest.mark.unit
