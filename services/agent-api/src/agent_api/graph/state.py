@@ -8,6 +8,7 @@ from workforce_risk.models import RiskResult
 
 from agent_api.graph.intents import Intent
 from agent_api.llm.schemas import ExplanationResponse
+from agent_api.task_queries import TaskQueryResult
 
 
 class VerifiedAgentContext(BaseModel):
@@ -39,6 +40,7 @@ class GraphState(TypedDict):
     tool_calls_used: int
     intent: NotRequired[Intent]
     risk: NotRequired[RiskResult]
+    task_query_result: NotRequired[TaskQueryResult]
     explanation: NotRequired[ExplanationResponse]
     capability_guidance: NotRequired[str]
     missing_sources: NotRequired[tuple[str, ...]]

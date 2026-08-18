@@ -36,7 +36,7 @@ class ModelExplanation(BaseModel):
 
 
 class ExplanationResponse(ModelExplanation):
-    source: Literal["bedrock", "deterministic_fallback"]
+    source: Literal["bedrock", "deterministic_fallback", "jira_mcp"]
     correlation_id: str
 
 

@@ -42,6 +42,10 @@ class JiraIssueReader(Protocol):
         self, issue_key: str, *, correlation_id: str
     ) -> JiraIssueEvidence: ...
 
+    async def search_issues(
+        self, jql: str, *, project_key: str, correlation_id: str
+    ) -> tuple[JiraIssueEvidence, ...]: ...
+
 
 class WorkforceScoringClient(Protocol):
     async def score(
@@ -95,6 +99,10 @@ class SingleIssueJiraEvidenceProvider:
         self._issue_keys = employee_issue_keys
         self._capacity = employee_capacity_hours
         self._environment = environment
+
+    @property
+    def jira_client(self) -> JiraIssueReader:
+        return self._jira
 
     async def get_employee_overload(
         self, employee_id: str, project_key: str, correlation_id: str

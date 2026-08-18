@@ -5,6 +5,7 @@ import os
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal, cast
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
@@ -22,6 +23,7 @@ from agent_api.auth.principal import AuthenticatedPrincipal
 from agent_api.auth.roles import ApplicationRole
 from agent_api.dependencies import (
     EmployeeEvidenceProvider,
+    SingleIssueJiraEvidenceProvider,
     WorkforceScoringClient,
     get_evidence_provider,
     get_scoring_client,
@@ -40,6 +42,7 @@ from agent_api.graph.state import (
 from agent_api.graph.workflow import InvestigationWorkflow
 from agent_api.llm.factory import get_explanation_provider
 from agent_api.llm.protocol import ExplanationProvider
+from agent_api.task_queries import JiraTaskQueryTool, TaskQueryResult
 
 router = APIRouter(prefix="/api/v1")
 
@@ -91,6 +94,26 @@ class EmployeeOverloadTool:
         )
         raw = await self._scoring.score(bundle.input, correlation_id)
         return RiskResult.model_validate(raw)
+
+
+class EvidenceBackedTaskQueryTool:
+    def __init__(self, evidence: EmployeeEvidenceProvider) -> None:
+        self._evidence = evidence
+
+    async def query(
+        self,
+        question: str,
+        references: EntityReferences,
+        correlation_id: str,
+    ) -> TaskQueryResult:
+        if not isinstance(self._evidence, SingleIssueJiraEvidenceProvider):
+            raise ValueError("Jira task queries require Jira evidence mode")
+        timezone = ZoneInfo(os.getenv("BUSINESS_TIMEZONE", "Asia/Jerusalem"))
+        tool = JiraTaskQueryTool(
+            self._evidence.jira_client,
+            today=lambda: datetime.now(timezone).date(),
+        )
+        return await tool.query(question, references, correlation_id)
 
 
 async def get_investigator(
@@ -195,6 +218,7 @@ async def investigate(
     )
     workflow = InvestigationWorkflow(
         tool=specialist_router,
+        task_query_tool=EvidenceBackedTaskQueryTool(evidence),
         explainer=explainer,
     )
     response.headers["X-Correlation-ID"] = correlation_id

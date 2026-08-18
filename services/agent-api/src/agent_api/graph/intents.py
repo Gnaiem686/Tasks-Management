@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from enum import StrEnum
 
 
@@ -11,6 +12,7 @@ class Intent(StrEnum):
     REASSIGNMENT_CANDIDATES = "reassignment_candidates"
     WHAT_IF_SIMULATION = "what_if_simulation"
     OPERATIONS_DIAGNOSIS = "operations_diagnosis"
+    JIRA_TASK_QUERY = "jira_task_query"
     UNSUPPORTED = "unsupported"
 
 
@@ -22,6 +24,7 @@ READ_ONLY_TOOL_ALLOWLISTS: dict[Intent, frozenset[str]] = {
     Intent.REASSIGNMENT_CANDIDATES: frozenset({"get_reassignment_candidates"}),
     Intent.WHAT_IF_SIMULATION: frozenset({"simulate_reassignment"}),
     Intent.OPERATIONS_DIAGNOSIS: frozenset({"diagnose_operations_read_only"}),
+    Intent.JIRA_TASK_QUERY: frozenset({"getJiraIssue", "searchJiraIssuesUsingJql"}),
 }
 
 
@@ -29,6 +32,15 @@ def classify_intent(question: str, *, default_scope: str | None = None) -> Inten
     text = " ".join(question.lower().split())
     if any(word in text for word in ("approve", "execute", "change assignee")):
         return Intent.UNSUPPORTED
+    has_issue_due_date = "due date" in text and re.search(
+        r"\b[A-Z][A-Z0-9]{1,19}-\d+\b", question.upper()
+    )
+    if has_issue_due_date or (
+        "task" in text
+        and ("due" in text or "tomorrow" in text)
+        and any(term in text for term in ("how many", "list", "what", "which"))
+    ):
+        return Intent.JIRA_TASK_QUERY
     if "what if" in text or "simulate" in text:
         return Intent.WHAT_IF_SIMULATION
     if any(word in text for word in ("candidate", "which employee", "could take")):

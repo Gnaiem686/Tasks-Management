@@ -260,3 +260,48 @@ def normalize_issue(
         evidence_references=references,
         untrusted_text=_untrusted(fields),
     )
+
+
+def normalize_issue_search(
+    raw: Mapping[str, Any],
+    *,
+    expected_environment: str,
+    expected_correlation_id: str,
+    custom_fields: Mapping[str, str],
+) -> tuple[JiraIssueEvidence, ...]:
+    envelope = JiraMcpEnvelope.model_validate(raw)
+    if envelope.environment != expected_environment:
+        raise JiraNormalizationError("MCP response environment mismatch")
+    if envelope.correlation_id != expected_correlation_id:
+        raise JiraNormalizationError("MCP response correlation ID mismatch")
+    if envelope.status != "success" or envelope.data is None:
+        raise JiraNormalizationError(envelope.error or "Jira MCP search failed")
+    raw_issues = envelope.data.get("issues")
+    if not isinstance(raw_issues, list) or not all(
+        isinstance(issue, Mapping) for issue in raw_issues
+    ):
+        raise JiraNormalizationError("Jira search issues must be a list of objects")
+    total = envelope.data.get("total")
+    truncated = (
+        bool(envelope.data.get("nextPageToken"))
+        or envelope.data.get("isLast") is False
+        or (isinstance(total, int) and total > len(raw_issues))
+    )
+    if truncated:
+        raise JiraNormalizationError("Jira search result is truncated")
+    return tuple(
+        normalize_issue(
+            {
+                "schema_version": envelope.schema_version,
+                "environment": envelope.environment,
+                "correlation_id": envelope.correlation_id,
+                "evidence_timestamp": envelope.evidence_timestamp,
+                "status": "success",
+                "data": dict(issue),
+            },
+            expected_environment=expected_environment,
+            expected_correlation_id=expected_correlation_id,
+            custom_fields=custom_fields,
+        )
+        for issue in raw_issues
+    )

@@ -20,7 +20,8 @@ from agent_api.graph.supervisor import (
     route_after_classification,
 )
 from agent_api.llm.protocol import ExplanationProvider
-from agent_api.llm.schemas import ExplanationRequest
+from agent_api.llm.schemas import ExplanationRequest, ExplanationResponse
+from agent_api.task_queries import TaskQueryResult
 
 
 class InvestigationTool(Protocol):
@@ -32,17 +33,28 @@ class InvestigationTool(Protocol):
     ) -> RiskResult: ...
 
 
+class TaskQueryTool(Protocol):
+    async def query(
+        self,
+        question: str,
+        references: EntityReferences,
+        correlation_id: str,
+    ) -> TaskQueryResult: ...
+
+
 class InvestigationWorkflow:
     def __init__(
         self,
         *,
         tool: InvestigationTool,
+        task_query_tool: TaskQueryTool | None = None,
         explainer: ExplanationProvider,
         max_steps: int = 6,
         max_tool_calls: int = 2,
         deadline_seconds: float = 15.0,
     ) -> None:
         self._tool = tool
+        self._task_query_tool = task_query_tool
         self._explainer = explainer
         self._max_steps = max_steps
         self._max_tool_calls = max_tool_calls
@@ -68,6 +80,19 @@ class InvestigationWorkflow:
     async def _gather(self, state: GraphState) -> dict[str, object]:
         if state["tool_calls_used"] >= self._max_tool_calls:
             raise RuntimeError("investigation tool-call limit reached")
+        if state["intent"] is Intent.JIRA_TASK_QUERY:
+            if self._task_query_tool is None:
+                raise ValueError("Jira task query tool is unavailable")
+            result = await self._task_query_tool.query(
+                state["question"],
+                state["references"],
+                state["verified_context"].correlation_id,
+            )
+            return {
+                "task_query_result": TaskQueryResult.model_validate(result),
+                "steps_used": state["steps_used"] + 1,
+                "tool_calls_used": state["tool_calls_used"] + 1,
+            }
         risk = await self._tool.investigate(
             state["intent"],
             state["references"],
@@ -80,6 +105,24 @@ class InvestigationWorkflow:
         }
 
     async def _explain(self, state: GraphState) -> dict[str, object]:
+        if state["intent"] is Intent.JIRA_TASK_QUERY:
+            result = state["task_query_result"]
+            explanation = ExplanationResponse(
+                answer=result.answer,
+                summary=result.answer,
+                root_causes=(),
+                recommendations=(),
+                citations=result.evidence_references,
+                score=None,
+                risk_level=None,
+                uncertainties=(),
+                source="jira_mcp",
+                correlation_id=result.correlation_id,
+            )
+            return {
+                "explanation": explanation,
+                "steps_used": state["steps_used"] + 1,
+            }
         explanation = await self._explainer.explain(
             ExplanationRequest(
                 workflow=state["intent"].value,
