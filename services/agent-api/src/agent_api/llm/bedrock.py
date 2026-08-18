@@ -181,6 +181,8 @@ class BedrockExplanationProvider:
             )
             if not mentioned_tasks.issubset(known_tasks):
                 raise ValueError("model invented Jira task evidence")
+            if request.evidence_dossier.tasks and not mentioned_tasks:
+                raise ValueError("model omitted concrete Jira task evidence")
         factor_terms = {
             term
             for factor in request.risk.factors

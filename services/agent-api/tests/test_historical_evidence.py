@@ -7,6 +7,7 @@ import pytest
 from agent_api.graph.intents import Intent, classify_intent
 from agent_api.historical_evidence import (
     DatabaseHistoricalEvidenceReader,
+    OnDemandHistoricalEvidenceReader,
     compare_dossiers,
     parse_historical_date,
 )
@@ -125,3 +126,30 @@ async def test_database_reader_rehydrates_immutable_dossier_and_risk() -> None:
 
     assert context.risk.score == 88
     assert context.dossier.total_remaining_hours == 72
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_on_demand_reader_closes_database_after_history_lookup() -> None:
+    database = SimpleNamespace(closed=False)
+
+    async def get_at(*_args: object) -> object:
+        return "historical-context"
+
+    async def close() -> None:
+        database.closed = True
+
+    database.close = close
+    reader = SimpleNamespace(get_at=get_at)
+    wrapper = OnDemandHistoricalEvidenceReader(
+        reader_factory=lambda: (database, reader)
+    )
+
+    await wrapper.get_at(
+        "Why was risk high on August 18?",
+        "EMP-003",
+        "WRD",
+        "corr-history",
+    )
+
+    assert database.closed is True

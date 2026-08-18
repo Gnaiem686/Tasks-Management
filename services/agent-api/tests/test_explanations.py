@@ -329,6 +329,19 @@ async def test_bedrock_cannot_invent_task_in_concrete_situation() -> None:
     assert result.source == "deterministic_fallback"
 
 
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_bedrock_must_name_a_known_task_when_dossier_has_tasks() -> None:
+    async def invoke(_system: str, _payload: dict[str, object]) -> str:
+        return json.dumps(valid_payload())
+
+    result = await BedrockExplanationProvider(invoke=invoke, max_attempts=1).explain(
+        request().model_copy(update={"evidence_dossier": dossier()})
+    )
+
+    assert result.source == "deterministic_fallback"
+
+
 def valid_payload() -> dict[str, object]:
     return {
         "answer": (

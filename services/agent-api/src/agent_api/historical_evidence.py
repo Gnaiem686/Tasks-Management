@@ -96,6 +96,32 @@ class DatabaseHistoricalEvidenceReader:
         raise ValueError("historical evidence is unavailable for the requested date")
 
 
+class OnDemandHistoricalEvidenceReader:
+    def __init__(self, *, reader_factory: Callable[[], tuple[Any, Any]]) -> None:
+        self._reader_factory = reader_factory
+
+    async def get_at(
+        self,
+        question: str,
+        employee_id: str,
+        project_key: str,
+        correlation_id: str,
+    ) -> HistoricalRiskContext:
+        database, reader = self._reader_factory()
+        try:
+            return cast(
+                HistoricalRiskContext,
+                await reader.get_at(
+                    question,
+                    employee_id,
+                    project_key,
+                    correlation_id,
+                ),
+            )
+        finally:
+            await database.close()
+
+
 class RiskEvidenceComparison(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     earlier_observed_at: datetime
