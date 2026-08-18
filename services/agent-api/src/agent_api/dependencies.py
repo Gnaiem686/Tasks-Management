@@ -15,6 +15,8 @@ from pydantic import BaseModel, ConfigDict
 from workforce_contracts.jira import JiraIssueEvidence
 from workforce_risk.models import EmployeeOverloadInput, RiskResult
 
+from agent_api.risk_evidence import JiraRiskEvidenceProvider, RiskEvidenceDossier
+
 
 class JiraEvidenceTimeout(TimeoutError):
     pass
@@ -103,6 +105,15 @@ class SingleIssueJiraEvidenceProvider:
     @property
     def jira_client(self) -> JiraIssueReader:
         return self._jira
+
+    async def get_current_dossier(
+        self, employee_id: str, project_key: str, correlation_id: str
+    ) -> RiskEvidenceDossier:
+        return await JiraRiskEvidenceProvider(
+            jira=self._jira,
+            capacities=self._capacity,
+            today=lambda: datetime.now(UTC).date(),
+        ).get_current_dossier(employee_id, project_key, correlation_id)
 
     async def get_employee_overload(
         self, employee_id: str, project_key: str, correlation_id: str

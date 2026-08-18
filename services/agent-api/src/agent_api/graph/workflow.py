@@ -21,6 +21,7 @@ from agent_api.graph.supervisor import (
 )
 from agent_api.llm.protocol import ExplanationProvider
 from agent_api.llm.schemas import ExplanationRequest, ExplanationResponse
+from agent_api.risk_evidence import RiskEvidenceDossier
 from agent_api.task_queries import TaskQueryResult
 
 
@@ -42,12 +43,19 @@ class TaskQueryTool(Protocol):
     ) -> TaskQueryResult: ...
 
 
+class RiskDossierTool(Protocol):
+    async def get_current_dossier(
+        self, employee_id: str, project_key: str, correlation_id: str
+    ) -> RiskEvidenceDossier: ...
+
+
 class InvestigationWorkflow:
     def __init__(
         self,
         *,
         tool: InvestigationTool,
         task_query_tool: TaskQueryTool | None = None,
+        dossier_tool: RiskDossierTool | None = None,
         explainer: ExplanationProvider,
         max_steps: int = 6,
         max_tool_calls: int = 2,
@@ -55,6 +63,7 @@ class InvestigationWorkflow:
     ) -> None:
         self._tool = tool
         self._task_query_tool = task_query_tool
+        self._dossier_tool = dossier_tool
         self._explainer = explainer
         self._max_steps = max_steps
         self._max_tool_calls = max_tool_calls
@@ -98,11 +107,25 @@ class InvestigationWorkflow:
             state["references"],
             state["verified_context"].correlation_id,
         )
-        return {
+        gathered: dict[str, object] = {
             "risk": RiskResult.model_validate(risk),
             "steps_used": state["steps_used"] + 1,
             "tool_calls_used": state["tool_calls_used"] + 1,
         }
+        if (
+            state["intent"] is Intent.EXPLAIN_EMPLOYEE_OVERLOAD
+            and self._dossier_tool is not None
+            and state["references"].employee_id is not None
+        ):
+            if state["tool_calls_used"] + 1 >= self._max_tool_calls:
+                raise RuntimeError("investigation tool-call limit reached")
+            gathered["evidence_dossier"] = await self._dossier_tool.get_current_dossier(
+                state["references"].employee_id,
+                state["references"].project_key,
+                state["verified_context"].correlation_id,
+            )
+            gathered["tool_calls_used"] = state["tool_calls_used"] + 2
+        return gathered
 
     async def _explain(self, state: GraphState) -> dict[str, object]:
         if state["intent"] is Intent.JIRA_TASK_QUERY:
@@ -128,6 +151,7 @@ class InvestigationWorkflow:
                 workflow=state["intent"].value,
                 question=state["question"],
                 risk=state["risk"],
+                evidence_dossier=state.get("evidence_dossier"),
                 correlation_id=state["verified_context"].correlation_id,
             )
         )

@@ -7,7 +7,12 @@ from agent_api.auth.roles import ApplicationRole
 from agent_api.graph.intents import Intent, classify_intent
 from agent_api.graph.state import EntityReferences, VerifiedAgentContext
 from agent_api.graph.workflow import InvestigationWorkflow
-from agent_api.llm.schemas import ExplanationResponse, Recommendation
+from agent_api.llm.schemas import (
+    ExplanationRequest,
+    ExplanationResponse,
+    Recommendation,
+)
+from agent_api.risk_evidence import RiskEvidenceDossier
 from agent_api.task_queries import TaskFact, TaskQueryResult
 from workforce_risk.models import RiskResult
 
@@ -55,6 +60,33 @@ class Explainer:
             source="deterministic_fallback",
             correlation_id="corr-graph",
         )
+
+
+class DossierTool:
+    async def get_current_dossier(
+        self, employee_id: str, project_key: str, correlation_id: str
+    ) -> RiskEvidenceDossier:
+        return RiskEvidenceDossier(
+            employee_id=employee_id,
+            project_key=project_key,
+            observed_at="2026-08-18T10:00:00Z",
+            available_capacity_hours=40,
+            total_remaining_hours=72,
+            tasks=(),
+            overdue_task_keys=("WRD-4",),
+            due_soon_task_keys=("WRD-6",),
+            blocked_task_keys=("WRD-6",),
+            missing_evidence=(),
+            evidence_references=("jira:WRD-4:duedate",),
+        )
+
+
+class CapturingExplainer(Explainer):
+    request: ExplanationRequest | None = None
+
+    async def explain(self, request: ExplanationRequest) -> ExplanationResponse:
+        self.request = request
+        return await super().explain(request)
 
 
 class TaskQueryTool:
@@ -156,6 +188,26 @@ async def test_workflow_returns_typed_cited_result() -> None:
     assert result.explanation.citations == ("jira:WRD-1:status",)
     assert result.steps_used <= 4
     assert result.tool_calls_used == tool.calls == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_employee_risk_explanation_receives_current_jira_dossier() -> None:
+    explainer = CapturingExplainer()
+    workflow = InvestigationWorkflow(
+        tool=Tool(), dossier_tool=DossierTool(), explainer=explainer
+    )
+
+    await workflow.run(
+        verified_context=context(),
+        question="How urgent is this risk?",
+        references=EntityReferences(employee_id="EMP-003", project_key="WRD"),
+    )
+
+    assert explainer.request is not None
+    assert explainer.request.evidence_dossier is not None
+    assert explainer.request.evidence_dossier.total_remaining_hours == 72
+    assert explainer.request.correlation_id == "corr-graph"
 
 
 @pytest.mark.unit

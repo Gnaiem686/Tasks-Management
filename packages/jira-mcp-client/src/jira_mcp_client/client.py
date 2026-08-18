@@ -135,9 +135,12 @@ class JiraEvidenceClient:
                 "priority",
                 "assignee",
                 "duedate",
+                "timeoriginalestimate",
+                "timeestimate",
                 "updated",
                 "labels",
                 "issuelinks",
+                *self._custom_fields.values(),
             ],
             "maxResults": 100,
         }
@@ -156,7 +159,7 @@ class JiraEvidenceClient:
                     raw,
                     expected_environment=self._environment,
                     expected_correlation_id=correlation_id,
-                    custom_fields={},
+                    custom_fields=self._custom_fields,
                 )
                 self._consecutive_failures = 0
                 return result

@@ -219,6 +219,9 @@ async def investigate(
     workflow = InvestigationWorkflow(
         tool=specialist_router,
         task_query_tool=EvidenceBackedTaskQueryTool(evidence),
+        dossier_tool=(
+            evidence if isinstance(evidence, SingleIssueJiraEvidenceProvider) else None
+        ),
         explainer=explainer,
     )
     response.headers["X-Correlation-ID"] = correlation_id
