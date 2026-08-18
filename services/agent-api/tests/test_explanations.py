@@ -117,6 +117,33 @@ async def test_bedrock_skips_inference_for_insufficient_data() -> None:
     assert called is False
 
 
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_bedrock_does_not_guess_improvement_from_one_snapshot() -> None:
+    called = False
+
+    async def invoke(_system: str, _payload: dict[str, object]) -> str:
+        nonlocal called
+        called = True
+        return json.dumps(valid_payload())
+
+    history = request().model_copy(
+        update={
+            "workflow": "explain_history",
+            "question": "Has this employee's situation improved?",
+            "evidence_dossier": dossier(),
+            "previous_evidence_dossier": None,
+        }
+    )
+    result = await BedrockExplanationProvider(invoke=invoke).explain(history)
+
+    assert result.source == "deterministic_fallback"
+    assert result.answer is not None
+    assert "cannot determine whether the situation improved" in result.answer
+    assert "one detailed risk snapshot" in result.answer
+    assert called is False
+
+
 def risk_result() -> RiskResult:
     return RiskResult.model_validate(
         {

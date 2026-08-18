@@ -24,6 +24,12 @@ class DeterministicFallbackProvider:
         if dossier is not None:
             details: list[str] = []
             previous = request.previous_evidence_dossier
+            if request.workflow == "explain_history" and previous is None:
+                details.append(
+                    "I cannot determine whether the situation improved because "
+                    "only one detailed risk snapshot is available. Run another "
+                    "scan after the Jira situation changes to create a comparison."
+                )
             if previous is not None:
                 comparison = compare_dossiers(previous, dossier)
                 if comparison.remaining_hours_change is not None:
