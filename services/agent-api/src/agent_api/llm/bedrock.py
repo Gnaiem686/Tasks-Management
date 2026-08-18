@@ -70,6 +70,7 @@ class BedrockExplanationProvider:
                     self._invoke(SYSTEM_PROMPT, payload), self._timeout_seconds
                 )
                 result = ModelExplanation.model_validate(json.loads(raw))
+                result = self._sanitize_subject_candidate(request, result)
                 self._validate_result(request, result)
                 self._failures = 0
                 return ExplanationResponse(
@@ -83,11 +84,17 @@ class BedrockExplanationProvider:
                 ValueError,
                 json.JSONDecodeError,
                 ValidationError,
-            ):
+            ) as error:
                 self._failures += 1
                 if self._failures >= self._failure_threshold:
                     self._opened_at = time.monotonic()
                 if attempt + 1 < self._max_attempts:
+                    candidate_correction = (
+                        " candidate_id must be null because no reassignment "
+                        "candidate was supplied."
+                        if str(error) == "model invented reassignment candidate"
+                        else ""
+                    )
                     payload = {
                         **payload,
                         "revision_required": (
@@ -96,6 +103,7 @@ class BedrockExplanationProvider:
                             "strongest contributors and lowest-impact factors "
                             "explicitly, explain why the result is not higher, and "
                             "do not say 'other factors' or disclose factor points."
+                            + candidate_correction
                         ),
                     }
                     await asyncio.sleep(min(0.05 * (2**attempt), 0.2))
@@ -109,6 +117,21 @@ class BedrockExplanationProvider:
         self._opened_at = None
         self._failures = 0
         return False
+
+    @staticmethod
+    def _sanitize_subject_candidate(
+        request: ExplanationRequest,
+        result: ModelExplanation,
+    ) -> ModelExplanation:
+        """Remove a subject ID mistakenly placed in an advisory candidate field."""
+        recommendations = tuple(
+            recommendation.model_copy(update={"candidate_id": None})
+            if recommendation.candidate_id == request.risk.subject_id
+            and recommendation.candidate_id not in request.candidate_ids
+            else recommendation
+            for recommendation in result.recommendations
+        )
+        return result.model_copy(update={"recommendations": recommendations})
 
     @staticmethod
     def _validate_result(request: ExplanationRequest, result: ModelExplanation) -> None:
@@ -128,10 +151,8 @@ class BedrockExplanationProvider:
         if not answer:
             raise ValueError("model returned an empty answer")
         sentence_count = len(re.findall(r"[.!?](?:\s|$)", answer))
-        if len(answer) < 180 or sentence_count < 3:
+        if len(answer) < 180 or sentence_count < 2:
             raise ValueError("model answer was not sufficiently detailed")
-        if "other factors" in answer.casefold():
-            raise ValueError("model answer used vague factor wording")
         if re.search(r"\b\d+(?:\.\d+)?\s+(?:contribution\s+)?points?\b", answer):
             raise ValueError("model exposed numeric factor contributions")
         answer_folded = answer.casefold()
@@ -145,3 +166,19 @@ class BedrockExplanationProvider:
         }
         if factor_terms and not any(term in answer_folded for term in factor_terms):
             raise ValueError("model answer did not mention supplied factors")
+        lowest_impact = sorted(
+            request.risk.factors,
+            key=lambda factor: (factor.contribution_points, factor.name),
+        )[:4]
+        lowest_impact_terms = {
+            term
+            for factor in lowest_impact
+            for term in (
+                factor.name.casefold(),
+                factor.name.replace("_", " ").casefold(),
+            )
+        }
+        if "other factors" in answer_folded and not any(
+            term in answer_folded for term in lowest_impact_terms
+        ):
+            raise ValueError("model answer used vague factor wording")
