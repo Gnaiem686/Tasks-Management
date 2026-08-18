@@ -219,6 +219,32 @@ def test_model_payload_derives_ordered_contributors_and_mitigating_factors() -> 
     assert [item["name"] for item in mitigators] == ["blocked_work"]
 
 
+def test_model_payload_derives_lowest_impact_factors_when_all_are_positive() -> None:
+    risk = risk_result().model_copy(
+        update={
+            "factors": tuple(
+                factor.model_copy(update={"contribution_points": contribution})
+                for factor, contribution in zip(
+                    risk_result().factors,
+                    (4.5, 3.75, 5.0),
+                    strict=True,
+                )
+            )
+        }
+    )
+
+    payload = build_model_payload(request().model_copy(update={"risk": risk}))
+
+    low_impact = payload["lowest_impact_factors"]
+    assert isinstance(low_impact, list)
+    assert [item["name"] for item in low_impact] == [
+        "overdue_work",
+        "utilization",
+        "blocked_work",
+    ]
+    assert all(item["impact"] == "low_relative_contribution" for item in low_impact)
+
+
 def test_model_payload_preserves_missing_evidence_for_uncertainty() -> None:
     risk = risk_result().model_copy(update={"missing_evidence": ("capacity",)})
     payload = build_model_payload(request().model_copy(update={"risk": risk}))
