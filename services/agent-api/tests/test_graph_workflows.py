@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 from agent_api.auth.roles import ApplicationRole
@@ -8,6 +8,7 @@ from agent_api.graph.intents import Intent, classify_intent
 from agent_api.graph.state import EntityReferences, VerifiedAgentContext
 from agent_api.graph.workflow import InvestigationWorkflow
 from agent_api.llm.schemas import ExplanationResponse, Recommendation
+from agent_api.task_queries import TaskFact, TaskQueryResult
 from workforce_risk.models import RiskResult
 
 
@@ -56,6 +57,31 @@ class Explainer:
         )
 
 
+class TaskQueryTool:
+    calls = 0
+
+    async def query(
+        self,
+        question: str,
+        references: EntityReferences,
+        correlation_id: str,
+    ) -> TaskQueryResult:
+        self.calls += 1
+        return TaskQueryResult(
+            answer="WRD-4 is due on 2026-08-17.",
+            tasks=(
+                TaskFact(
+                    key="WRD-4",
+                    summary="Build manager result view",
+                    status="Idea",
+                    due_date=date(2026, 8, 17),
+                ),
+            ),
+            evidence_references=("jira:WRD-4:duedate",),
+            correlation_id=correlation_id,
+        )
+
+
 def context() -> VerifiedAgentContext:
     return VerifiedAgentContext(
         subject_reference="manager-1",
@@ -81,6 +107,11 @@ def context() -> VerifiedAgentContext:
         ("Which employees could take this task?", Intent.REASSIGNMENT_CANDIDATES),
         ("What if we move this task?", Intent.WHAT_IF_SIMULATION),
         ("Why is the service unhealthy?", Intent.OPERATIONS_DIAGNOSIS),
+        ("What is the due date of WRD-4?", Intent.JIRA_TASK_QUERY),
+        (
+            "How many unfinished tasks does Employee 3 have due by tomorrow?",
+            Intent.JIRA_TASK_QUERY,
+        ),
     ],
 )
 def test_supported_intents_are_finite(question: str, expected: Intent) -> None:
@@ -125,6 +156,31 @@ async def test_workflow_returns_typed_cited_result() -> None:
     assert result.explanation.citations == ("jira:WRD-1:status",)
     assert result.steps_used <= 4
     assert result.tool_calls_used == tool.calls == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_task_due_date_uses_jira_query_not_risk_scoring() -> None:
+    risk_tool = Tool()
+    query_tool = TaskQueryTool()
+    workflow = InvestigationWorkflow(
+        tool=risk_tool,
+        task_query_tool=query_tool,
+        explainer=Explainer(),
+    )
+    result = await workflow.run(
+        verified_context=context(),
+        question="What is the due date of WRD-4?",
+        references=EntityReferences(employee_id="EMP-003", project_key="WRD"),
+    )
+    assert result.intent is Intent.JIRA_TASK_QUERY
+    assert result.risk is None
+    assert result.explanation is not None
+    assert result.explanation.answer == "WRD-4 is due on 2026-08-17."
+    assert result.explanation.source == "jira_mcp"
+    assert result.explanation.citations == ("jira:WRD-4:duedate",)
+    assert risk_tool.calls == 0
+    assert query_tool.calls == 1
 
 
 @pytest.mark.unit

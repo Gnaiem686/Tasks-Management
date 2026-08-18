@@ -16,6 +16,7 @@ from agent_api.dependencies import (
     get_evidence_provider,
     get_scoring_client,
 )
+from agent_api.llm.factory import get_explanation_provider
 from agent_api.main import app
 from agent_api.routes.investigations import get_investigator
 from httpx import ASGITransport, AsyncClient, Response
@@ -95,6 +96,13 @@ async def api_get(path: str, headers: dict[str, str] | None = None) -> Response:
         return await client.get(path, headers=headers)
 
 
+async def api_post(path: str, payload: dict[str, Any]) -> Response:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        return await client.post(path, json=payload)
+
+
 def dependency_returning(value: Any) -> Any:
     async def dependency() -> Any:
         return value
@@ -107,6 +115,7 @@ class JiraClient:
         raw = json.loads(
             (ROOT / "tests/fixtures/jira/wrd_1_structured.json").read_text()
         )
+        raw["data"]["key"] = issue_key
         raw["data"]["fields"]["labels"] = ["workforce-workload-profile:critical"]
         raw["correlation_id"] = correlation_id
         return normalize_issue(
@@ -115,6 +124,44 @@ class JiraClient:
             expected_correlation_id=correlation_id,
             custom_fields={"blocker_category": "customfield_10042"},
         )
+
+    async def search_issues(
+        self, jql: str, *, project_key: str, correlation_id: str
+    ) -> tuple[Any, ...]:
+        assert project_key == "WRD"
+        return (await self.get_issue("WRD-4", correlation_id=correlation_id),)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_investigation_due_date_question_returns_jira_mcp_fact() -> None:
+    provider = SingleIssueJiraEvidenceProvider(
+        jira_client=JiraClient(),
+        employee_issue_keys={"EMP-003": "WRD-4"},
+        employee_capacity_hours={"EMP-003": 40},
+        environment="test",
+    )
+    app.dependency_overrides[get_evidence_provider] = dependency_returning(provider)
+    app.dependency_overrides[get_scoring_client] = dependency_returning(ScoringClient())
+    app.dependency_overrides[get_explanation_provider] = dependency_returning(object())
+
+    response = await api_post(
+        "/api/v1/investigations?project_key=WRD",
+        {
+            "question": "What is the due date of WRD-4?",
+            "context": {
+                "project_key": "WRD",
+                "employee_id": "EMP-003",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"] == "jira_task_query"
+    assert body["risk"] is None
+    assert body["explanation"]["source"] == "jira_mcp"
+    assert body["explanation"]["answer"].startswith("WRD-4 is due on ")
 
 
 @pytest.mark.unit

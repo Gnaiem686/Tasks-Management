@@ -158,7 +158,9 @@ function renderAnswer(payload) {
   const guidance = payload.capability_guidance;
   setText("#answer-text", explanation ? (explanation.answer || explanation.summary) : guidance);
   setText("#answer-source", explanation
-    ? (explanation.source === "bedrock" ? "Amazon Bedrock" : "Deterministic fallback")
+    ? (explanation.source === "bedrock"
+      ? "Amazon Bedrock"
+      : explanation.source === "jira_mcp" ? "Jira MCP" : "Deterministic fallback")
     : "Capability guidance");
   renderList("#chat-citations", explanation ? explanation.citations : []);
   setText("#chat-correlation", payload.correlation_id || "unavailable");
