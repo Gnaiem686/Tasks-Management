@@ -45,3 +45,12 @@ def test_client_sends_only_bounded_context_and_renders_safe_text() -> None:
     assert "correlation_id" in script
     assert "explanation.source" in script
     assert "explanation.answer" in script
+
+
+@pytest.mark.ui
+def test_jira_evidence_references_are_rendered_as_verification_links() -> None:
+    script = (WEB / "static" / "chat.js").read_text()
+
+    assert "function renderEvidenceReferences" in script
+    assert "/browse/${issueKey}" in script
+    assert "citation.match(/^jira:([A-Z][A-Z0-9]{1,19}-\\d+):/" in script

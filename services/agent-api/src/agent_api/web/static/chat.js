@@ -153,6 +153,30 @@ function renderList(selector, values) {
   }
 }
 
+function renderEvidenceReferences(citations, historical) {
+  const list = document.querySelector("#chat-citations");
+  const jiraSite = document.body.dataset.jiraSite?.replace(/\/$/, "");
+  list.replaceChildren();
+  for (const citation of citations) {
+    const item = document.createElement("li");
+    const match = citation.match(/^jira:([A-Z][A-Z0-9]{1,19}-\d+):/);
+    if (match && jiraSite?.startsWith("https://")) {
+      const issueKey = match[1];
+      const link = document.createElement("a");
+      link.href = `${jiraSite}/browse/${issueKey}`;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = historical
+        ? `${citation} — open current Jira issue; answer uses historical snapshot`
+        : `${citation} — verify in Jira`;
+      item.appendChild(link);
+    } else {
+      item.appendChild(document.createTextNode(citation));
+    }
+    list.appendChild(item);
+  }
+}
+
 function renderAnswer(payload) {
   const explanation = payload.explanation;
   const guidance = payload.capability_guidance;
@@ -162,7 +186,10 @@ function renderAnswer(payload) {
       ? "Amazon Bedrock"
       : explanation.source === "jira_mcp" ? "Jira MCP" : "Deterministic fallback")
     : "Capability guidance");
-  renderList("#chat-citations", explanation ? explanation.citations : []);
+  renderEvidenceReferences(
+    explanation ? explanation.citations : [],
+    payload.intent === "explain_history",
+  );
   setText("#chat-correlation", payload.correlation_id || "unavailable");
   chatAnswer.hidden = false;
 }
