@@ -20,6 +20,20 @@ from scripts.scenario.evaluate_results import evaluate_agent_result
 FIXTURE = Path("tests/fixtures/scenarios/seven_employee_team.json")
 
 
+def _create_labels(arguments: dict[str, object]) -> list[str]:
+    fields = arguments.get("additional_fields")
+    assert isinstance(fields, dict)
+    labels = fields.get("labels")
+    assert isinstance(labels, list)
+    return [str(label) for label in labels]
+
+
+def _create_summary(arguments: dict[str, object]) -> str:
+    summary = arguments.get("summary")
+    assert isinstance(summary, str)
+    return summary
+
+
 def load_scenario() -> ScenarioDefinition:
     return ScenarioDefinition.model_validate_json(FIXTURE.read_text())
 
@@ -258,19 +272,67 @@ async def test_real_mcp_seeder_uses_search_then_create_without_rest() -> None:
         blocker_field_id="customfield_10042",
     )
 
-    assert result.created == len(scenario.issues)
+    assert result.created == len(scenario.issues) + len(scenario.profiles)
     assert {name for name, _ in transport.calls} <= {
         "searchJiraIssuesUsingJql",
         "createJiraIssue",
         "createIssueLink",
     }
     first_create = next(
-        args for name, args in transport.calls if name == "createJiraIssue"
+        args
+        for name, args in transport.calls
+        if name == "createJiraIssue"
+        and "workforce-employee:EMP-001" in _create_labels(args)
     )
     fields = first_create["additional_fields"]
     assert isinstance(fields, dict)
     assert "workforce-employee:EMP-001" in fields["labels"]
     assert fields["customfield_10042"] is None
+
+
+@pytest.mark.asyncio
+async def test_real_mcp_seeder_creates_display_only_employee_profile_rows() -> None:
+    scenario = load_scenario()
+
+    class RecordingTransport:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, dict[str, object]]] = []
+
+        async def call_tool(
+            self,
+            name: str,
+            arguments: dict[str, object],
+            *,
+            correlation_id: str,
+        ) -> dict[str, object]:
+            self.calls.append((name, arguments))
+            if name == "searchJiraIssuesUsingJql":
+                return {"issues": []}
+            if name == "createJiraIssue":
+                return {"key": f"WRD-{len(self.calls)}"}
+            return {"status": "ok"}
+
+    transport = RecordingTransport()
+    await RovoScenarioSeeder(transport).seed(
+        scenario,
+        correlation_id="profile-row-test",
+        blocker_field_id="customfield_10042",
+    )
+
+    profile_creates = [
+        arguments
+        for name, arguments in transport.calls
+        if name == "createJiraIssue"
+        and "workforce-record:employee-profile" in _create_labels(arguments)
+    ]
+    assert len(profile_creates) == 7
+    assert {
+        _create_summary(arguments).split(" — ", maxsplit=1)[0]
+        for arguments in profile_creates
+    } == {f"Employee Profile {number:03d}" for number in range(1, 8)}
+    for arguments in profile_creates:
+        labels = _create_labels(arguments)
+        assert not any(label.startswith("workforce-employee:") for label in labels)
 
 
 @pytest.mark.asyncio

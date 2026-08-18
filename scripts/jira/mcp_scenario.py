@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict
 
 from scripts.jira.guards import validate_scenario_scope
-from scripts.jira.scenario import OperationResult, ScenarioDefinition, ScenarioIssue
+from scripts.jira.scenario import (
+    OperationResult,
+    ScenarioDefinition,
+    ScenarioIssue,
+    ScenarioProfile,
+)
 
 
 class ScenarioMcpTransport(Protocol):
@@ -49,6 +55,49 @@ class RovoScenarioSeeder:
         )
         created = 0
         changed = 0
+        for profile in scenario.profiles:
+            profile_label = f"workforce-profile-id:{profile.employee_id}"
+            search = await self._transport.call_tool(
+                "searchJiraIssuesUsingJql",
+                {
+                    "jql": (
+                        f'project = "{scenario.project_key}" '
+                        f'AND labels = "{profile_label}"'
+                    ),
+                    "fields": ["key", "labels", "summary", "description"],
+                    "maxResults": 50,
+                },
+                correlation_id=correlation_id,
+            )
+            matches = _issues(search)
+            summary, description, fields = _jira_profile_fields(profile)
+            if not matches:
+                await self._transport.call_tool(
+                    "createJiraIssue",
+                    {
+                        "projectKey": scenario.project_key,
+                        "issueTypeName": "Task",
+                        "summary": summary,
+                        "description": description,
+                        "additional_fields": fields,
+                    },
+                    correlation_id=correlation_id,
+                )
+                created += 1
+            else:
+                await self._transport.call_tool(
+                    "editJiraIssue",
+                    {
+                        "issueIdOrKey": _issue_key(matches[0]),
+                        "fields": {
+                            "summary": summary,
+                            "description": description,
+                            **fields,
+                        },
+                    },
+                    correlation_id=correlation_id,
+                )
+                changed += 1
         issue_keys: dict[str, str] = {}
         existing_links: set[frozenset[str]] = set()
         for issue in scenario.issues:
@@ -230,6 +279,55 @@ def _jira_fields(
             else None
         ),
     }
+
+
+def _jira_profile_fields(
+    profile: ScenarioProfile,
+) -> tuple[str, str, dict[str, object]]:
+    employee_id = profile.employee_id
+    role = profile.role
+    seniority = profile.seniority
+    capacity_hours = profile.capacity_hours
+    allocation = profile.allocation
+    mentoring_available = profile.mentoring_available
+    skills = profile.skills
+    number = employee_id.removeprefix("EMP-")
+    summary = f"Employee Profile {number} — {role} ({seniority})"
+    skill_text = ", ".join(
+        f"{name} (level {level})" for name, level in sorted(skills.items())
+    )
+    description = (
+        "Synthetic workforce profile used for the Workforce Risk Manager demo.\n\n"
+        f"Employee ID: {employee_id}\n"
+        f"Role: {role}\n"
+        f"Seniority: {seniority}\n"
+        f"Weekly capacity: {capacity_hours:g} hours\n"
+        f"Project allocation: {allocation:.0%}\n"
+        f"Mentoring available: {'Yes' if mentoring_available else 'No'}\n"
+        f"Documented skills: {skill_text}"
+    )
+    labels = {
+        "workforce-record:employee-profile",
+        f"workforce-profile-id:{employee_id}",
+        f"workforce-profile-role:{_label_slug(role)}",
+        f"workforce-profile-seniority:{_label_slug(seniority)}",
+        f"workforce-profile-capacity-hours:{capacity_hours:g}",
+        f"workforce-profile-allocation-percent:{allocation * 100:g}",
+        (
+            "workforce-profile-mentoring:available"
+            if mentoring_available
+            else "workforce-profile-mentoring:unavailable"
+        ),
+        *(
+            f"workforce-profile-skill:{_label_slug(str(name))}:{level}"
+            for name, level in skills.items()
+        ),
+    }
+    return summary, description, {"labels": sorted(labels)}
+
+
+def _label_slug(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", value.casefold()).strip("-")
 
 
 def _unwrap(payload: dict[str, Any]) -> dict[str, Any]:

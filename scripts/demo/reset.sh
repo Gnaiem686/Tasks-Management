@@ -11,3 +11,4 @@ SCENARIO="${ROOT_DIR}/tests/fixtures/scenarios/seven_employee_team.json"
 
 echo "Jira scenario reset to balanced."
 echo "Open: https://gnaiem686.atlassian.net/issues/?jql=project%20%3D%20WRD%20AND%20labels%20%3D%20%22workforce-scenario%3Aseven-person%3Av1%22"
+echo "Employees: https://gnaiem686.atlassian.net/issues/?jql=project%20%3D%20WRD%20AND%20labels%20%3D%20%22workforce-record%3Aemployee-profile%22%20ORDER%20BY%20summary"
