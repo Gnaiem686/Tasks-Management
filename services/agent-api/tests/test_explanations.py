@@ -7,7 +7,7 @@ import pytest
 from agent_api.llm.bedrock import BedrockExplanationProvider
 from agent_api.llm.factory import get_explanation_provider
 from agent_api.llm.fallback import DeterministicFallbackProvider
-from agent_api.llm.schemas import ExplanationRequest
+from agent_api.llm.schemas import ExplanationRequest, build_model_payload
 from workforce_risk.models import ConfidenceLevel, RiskResult
 
 
@@ -136,10 +136,32 @@ def risk_result() -> RiskResult:
                     "direction": "increases_risk",
                     "contribution_points": 40,
                     "evidence_references": ["jira:WRD-1"],
-                }
+                },
+                {
+                    "name": "overdue_work",
+                    "raw_value": 1,
+                    "normalized_value": 1,
+                    "weight": 0.15,
+                    "direction": "increases_risk",
+                    "contribution_points": 15,
+                    "evidence_references": ["jira:WRD-1:duedate"],
+                },
+                {
+                    "name": "blocked_work",
+                    "raw_value": 0,
+                    "normalized_value": 0,
+                    "weight": 0.15,
+                    "direction": "increases_risk",
+                    "contribution_points": 0,
+                    "evidence_references": ["jira:jql:blocked"],
+                },
             ],
             "thresholds": {"low_max": 29, "medium_max": 54, "high_max": 74},
-            "evidence_references": ["jira:WRD-1"],
+            "evidence_references": [
+                "jira:WRD-1",
+                "jira:WRD-1:duedate",
+                "jira:jql:blocked",
+            ],
             "missing_evidence": [],
             "excluded_evidence": [],
         }
@@ -160,7 +182,8 @@ def request() -> ExplanationRequest:
 def valid_payload() -> dict[str, object]:
     return {
         "answer": (
-            "This employee is critically overloaded because work exceeds capacity."
+            "This employee is critically overloaded because high utilization means "
+            "assigned work exceeds capacity."
         ),
         "summary": "Work exceeds available capacity.",
         "root_causes": ["High utilization"],
@@ -171,11 +194,33 @@ def valid_payload() -> dict[str, object]:
                 "candidate_id": "EMP-003",
             }
         ],
-        "citations": ["jira:WRD-1"],
+        "citations": ["jira:WRD-1", "jira:WRD-1:duedate"],
         "score": 88,
         "risk_level": "critical",
         "uncertainties": [],
     }
+
+
+def test_model_payload_derives_ordered_contributors_and_mitigating_factors() -> None:
+    payload = build_model_payload(request())
+
+    contributors = payload["strongest_contributors"]
+    mitigators = payload["mitigating_factors"]
+    assert isinstance(contributors, list)
+    assert isinstance(mitigators, list)
+    assert [item["name"] for item in contributors] == [
+        "utilization",
+        "overdue_work",
+    ]
+    assert contributors[0]["evidence_references"] == ["jira:WRD-1"]
+    assert [item["name"] for item in mitigators] == ["blocked_work"]
+
+
+def test_model_payload_preserves_missing_evidence_for_uncertainty() -> None:
+    risk = risk_result().model_copy(update={"missing_evidence": ("capacity",)})
+    payload = build_model_payload(request().model_copy(update={"risk": risk}))
+
+    assert payload["missing_evidence"] == ["capacity"]
 
 
 @pytest.mark.unit
@@ -195,7 +240,7 @@ async def test_valid_output_preserves_score_and_uses_minimal_evidence() -> None:
     assert result.answer is not None
     assert result.answer.startswith("This employee")
     assert result.score == 88
-    assert result.citations == ("jira:WRD-1",)
+    assert result.citations == ("jira:WRD-1", "jira:WRD-1:duedate")
     assert captured["correlation_id"] == "corr-4-1"
 
 
@@ -226,6 +271,47 @@ async def test_invalid_model_claim_falls_back(change: dict[str, object]) -> None
     assert result.source == "deterministic_fallback"
     assert result.score == 88
     assert result.recommendations[0].candidate_id is None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "Other factors mitigate the risk.",
+        "Utilization contributes 40 points, so the employee is overloaded.",
+    ],
+)
+async def test_generic_or_factor_numeric_answer_falls_back(answer: str) -> None:
+    async def invoke(_system: str, _payload: dict[str, object]) -> str:
+        return json.dumps(valid_payload() | {"answer": answer})
+
+    result = await BedrockExplanationProvider(
+        invoke=invoke,
+        max_attempts=1,
+    ).explain(request())
+
+    assert result.source == "deterministic_fallback"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_detailed_factor_specific_answer_is_accepted() -> None:
+    answer = (
+        "The overall risk is critical at 88/100. High utilization is the "
+        "strongest reason because assigned work exceeds available capacity, and "
+        "overdue work adds deadline pressure. Blocked work is currently absent, "
+        "which limits further risk. The manager should reduce the active workload "
+        "first and confirm whether capacity information is current."
+    )
+
+    async def invoke(_system: str, _payload: dict[str, object]) -> str:
+        return json.dumps(valid_payload() | {"answer": answer})
+
+    result = await BedrockExplanationProvider(invoke=invoke).explain(request())
+
+    assert result.source == "bedrock"
+    assert result.answer == answer
 
 
 @pytest.mark.unit
