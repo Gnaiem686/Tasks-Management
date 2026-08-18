@@ -19,8 +19,10 @@ from agent_api.graph.supervisor import (
     receive_verified_context,
     route_after_classification,
 )
+from agent_api.historical_evidence import HistoricalRiskContext
 from agent_api.llm.protocol import ExplanationProvider
 from agent_api.llm.schemas import ExplanationRequest, ExplanationResponse
+from agent_api.risk_evidence import RiskEvidenceDossier
 from agent_api.task_queries import TaskQueryResult
 
 
@@ -42,12 +44,30 @@ class TaskQueryTool(Protocol):
     ) -> TaskQueryResult: ...
 
 
+class RiskDossierTool(Protocol):
+    async def get_current_dossier(
+        self, employee_id: str, project_key: str, correlation_id: str
+    ) -> RiskEvidenceDossier: ...
+
+
+class HistoricalEvidenceTool(Protocol):
+    async def get_at(
+        self,
+        question: str,
+        employee_id: str,
+        project_key: str,
+        correlation_id: str,
+    ) -> HistoricalRiskContext: ...
+
+
 class InvestigationWorkflow:
     def __init__(
         self,
         *,
         tool: InvestigationTool,
         task_query_tool: TaskQueryTool | None = None,
+        dossier_tool: RiskDossierTool | None = None,
+        historical_tool: HistoricalEvidenceTool | None = None,
         explainer: ExplanationProvider,
         max_steps: int = 6,
         max_tool_calls: int = 2,
@@ -55,6 +75,8 @@ class InvestigationWorkflow:
     ) -> None:
         self._tool = tool
         self._task_query_tool = task_query_tool
+        self._dossier_tool = dossier_tool
+        self._historical_tool = historical_tool
         self._explainer = explainer
         self._max_steps = max_steps
         self._max_tool_calls = max_tool_calls
@@ -93,16 +115,50 @@ class InvestigationWorkflow:
                 "steps_used": state["steps_used"] + 1,
                 "tool_calls_used": state["tool_calls_used"] + 1,
             }
+        if state["intent"] is Intent.EXPLAIN_HISTORY:
+            if self._historical_tool is None or state["references"].employee_id is None:
+                raise ValueError("historical employee evidence is unavailable")
+            historical = await self._historical_tool.get_at(
+                state["question"],
+                state["references"].employee_id,
+                state["references"].project_key,
+                state["verified_context"].correlation_id,
+            )
+            historical_result: dict[str, object] = {
+                "risk": historical.risk,
+                "evidence_dossier": historical.dossier,
+                "steps_used": state["steps_used"] + 1,
+                "tool_calls_used": state["tool_calls_used"] + 1,
+            }
+            if historical.previous_dossier is not None:
+                historical_result["previous_evidence_dossier"] = (
+                    historical.previous_dossier
+                )
+            return historical_result
         risk = await self._tool.investigate(
             state["intent"],
             state["references"],
             state["verified_context"].correlation_id,
         )
-        return {
+        gathered: dict[str, object] = {
             "risk": RiskResult.model_validate(risk),
             "steps_used": state["steps_used"] + 1,
             "tool_calls_used": state["tool_calls_used"] + 1,
         }
+        if (
+            state["intent"] is Intent.EXPLAIN_EMPLOYEE_OVERLOAD
+            and self._dossier_tool is not None
+            and state["references"].employee_id is not None
+        ):
+            if state["tool_calls_used"] + 1 >= self._max_tool_calls:
+                raise RuntimeError("investigation tool-call limit reached")
+            gathered["evidence_dossier"] = await self._dossier_tool.get_current_dossier(
+                state["references"].employee_id,
+                state["references"].project_key,
+                state["verified_context"].correlation_id,
+            )
+            gathered["tool_calls_used"] = state["tool_calls_used"] + 2
+        return gathered
 
     async def _explain(self, state: GraphState) -> dict[str, object]:
         if state["intent"] is Intent.JIRA_TASK_QUERY:
@@ -128,6 +184,8 @@ class InvestigationWorkflow:
                 workflow=state["intent"].value,
                 question=state["question"],
                 risk=state["risk"],
+                evidence_dossier=state.get("evidence_dossier"),
+                previous_evidence_dossier=state.get("previous_evidence_dossier"),
                 correlation_id=state["verified_context"].correlation_id,
             )
         )

@@ -40,6 +40,10 @@ from agent_api.graph.state import (
     VerifiedAgentContext,
 )
 from agent_api.graph.workflow import InvestigationWorkflow
+from agent_api.historical_evidence import (
+    DatabaseHistoricalEvidenceReader,
+    OnDemandHistoricalEvidenceReader,
+)
 from agent_api.llm.factory import get_explanation_provider
 from agent_api.llm.protocol import ExplanationProvider
 from agent_api.task_queries import JiraTaskQueryTool, TaskQueryResult
@@ -216,9 +220,32 @@ async def investigate(
         ),
         context=verified,
     )
+    database_url = os.getenv("DATABASE_URL")
+
+    def historical_reader_factory() -> tuple[
+        Database, DatabaseHistoricalEvidenceReader
+    ]:
+        assert database_url is not None
+        database = Database(database_url)
+        return database, DatabaseHistoricalEvidenceReader(
+            database,
+            environment=principal.environment,
+            today=lambda: datetime.now(
+                ZoneInfo(os.getenv("BUSINESS_TIMEZONE", "Asia/Jerusalem"))
+            ).date(),
+        )
+
     workflow = InvestigationWorkflow(
         tool=specialist_router,
         task_query_tool=EvidenceBackedTaskQueryTool(evidence),
+        dossier_tool=(
+            evidence if isinstance(evidence, SingleIssueJiraEvidenceProvider) else None
+        ),
+        historical_tool=(
+            OnDemandHistoricalEvidenceReader(reader_factory=historical_reader_factory)
+            if database_url
+            else None
+        ),
         explainer=explainer,
     )
     response.headers["X-Correlation-ID"] = correlation_id

@@ -32,6 +32,17 @@ def classify_intent(question: str, *, default_scope: str | None = None) -> Inten
     text = " ".join(question.lower().split())
     if any(word in text for word in ("approve", "execute", "change assignee")):
         return Intent.UNSUPPORTED
+    historical_date = re.search(
+        r"\b20\d{2}-\d{2}-\d{2}\b|\b(?:january|february|march|april|may|june|"
+        r"july|august|september|october|november|december)\s+\d{1,2}\b",
+        text,
+    )
+    if historical_date and any(
+        term in text for term in ("risk", "overload", "improved", "situation")
+    ):
+        return Intent.EXPLAIN_HISTORY
+    if any(term in text for term in ("improved", "improvement", "changed since")):
+        return Intent.EXPLAIN_HISTORY
     has_issue_due_date = "due date" in text and re.search(
         r"\b[A-Z][A-Z0-9]{1,19}-\d+\b", question.upper()
     )

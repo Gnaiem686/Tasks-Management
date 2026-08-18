@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import html
+import os
 from pathlib import Path
 
 from fastapi import APIRouter
@@ -11,8 +13,10 @@ TEMPLATE = Path(__file__).parents[1] / "web" / "templates" / "chat.html"
 
 @router.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def manager_ui() -> HTMLResponse:
+    jira_site = os.getenv("JIRA_SITE_URL", os.getenv("JIRA_CLOUD_ID", ""))
+    body = TEMPLATE.read_text().replace("{{JIRA_SITE_URL}}", html.escape(jira_site))
     return HTMLResponse(
-        TEMPLATE.read_text(),
+        body,
         headers={
             "Content-Security-Policy": (
                 "default-src 'self'; script-src 'self'; style-src 'self'; "
