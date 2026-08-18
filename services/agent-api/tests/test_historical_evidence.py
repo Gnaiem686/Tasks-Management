@@ -130,6 +130,59 @@ async def test_database_reader_rehydrates_immutable_dossier_and_risk() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_improvement_reader_returns_single_snapshot_as_insufficient_history() -> (
+    None
+):
+    current_dossier = dossier(
+        observed="2026-08-18T10:00:00Z", remaining=72, blocked=True
+    )
+    snapshot = SimpleNamespace(
+        environment="test",
+        subject_id="EMP-003",
+        observed_at=current_dossier.observed_at,
+        evidence={"risk_evidence_dossier": current_dossier.model_dump(mode="json")},
+    )
+    risk = SimpleNamespace(
+        score=88,
+        level="critical",
+        confidence="high",
+        created_at=snapshot.observed_at,
+        scoring_version="employee-overload-v1",
+        factors=[],
+        thresholds={"low_max": 29, "medium_max": 54, "high_max": 74},
+        evidence_references=["jira:WRD-6:status"],
+        missing_evidence=[],
+        excluded_evidence=[],
+    )
+
+    class Result:
+        def all(self) -> list[tuple[object, object]]:
+            return [(snapshot, risk)]
+
+    class Session:
+        async def execute(self, _query: object) -> Result:
+            return Result()
+
+    class Database:
+        @asynccontextmanager
+        async def transaction(self) -> AsyncIterator[Session]:
+            yield Session()
+
+    context = await DatabaseHistoricalEvidenceReader(
+        Database(), environment="test", today=lambda: date(2026, 8, 18)
+    ).get_at(
+        "Has this employee's situation improved?",
+        "EMP-003",
+        "WRD",
+        "corr-history",
+    )
+
+    assert context.dossier == current_dossier
+    assert context.previous_dossier is None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_on_demand_reader_closes_database_after_history_lookup() -> None:
     database = SimpleNamespace(closed=False)
 

@@ -93,6 +93,8 @@ class DatabaseHistoricalEvidenceReader:
                 return contexts[0].model_copy(
                     update={"previous_dossier": contexts[1].dossier}
                 )
+        if contexts and requested is None:
+            return contexts[0]
         raise ValueError("historical evidence is unavailable for the requested date")
 
 
