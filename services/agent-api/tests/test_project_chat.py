@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from typing import Any
 
@@ -121,6 +122,72 @@ async def test_bedrock_only_mode_never_returns_deterministic_prose() -> None:
                 correlation_id="corr-project-chat",
             )
         )
+
+
+@pytest.mark.asyncio
+async def test_project_chat_discards_unsupported_model_score_and_candidate() -> None:
+    async def invoke(system_prompt: str, payload: dict[str, object]) -> str:
+        return json.dumps(
+            {
+                "answer": (
+                    "The project has urgent blocked work in WRD-8 and missing "
+                    "estimates across several active tasks. Review WRD-8 first "
+                    "because its blocker and approaching deadline create the "
+                    "clearest delivery concern. Confirm the missing estimates "
+                    "before making a broader workload decision."
+                ),
+                "summary": "Project risk summary",
+                "root_causes": ["Blocked work"],
+                "recommendations": [
+                    {
+                        "action": "review",
+                        "reason": "Inspect WRD-8",
+                        "candidate_id": "invented-user",
+                    }
+                ],
+                "citations": ["jira:WRD-8:summary"],
+                "score": 80,
+                "risk_level": "high",
+                "uncertainties": ["Missing estimates"],
+            }
+        )
+
+    project_data = snapshot().model_dump()
+    project_data["tasks"] = (
+        {
+            "key": "WRD-8",
+            "summary": "Database migration",
+            "status": "Blocked",
+            "priority": "Highest",
+            "assignee_id": None,
+            "assignee_name": None,
+            "due_date": None,
+            "original_hours": None,
+            "remaining_hours": None,
+            "required_skills": (),
+            "blocker": "Technical blocker",
+            "dependencies": (),
+            "jira_url": "https://example.atlassian.net/browse/WRD-8",
+        },
+    )
+    project = DashboardSnapshot.model_validate(project_data)
+    provider = BedrockExplanationProvider(
+        invoke=invoke, allow_fallback=False, max_attempts=1
+    )
+
+    result = await provider.explain(
+        ExplanationRequest(
+            workflow="explain_project_risk",
+            question="Summarize project risk",
+            project_snapshot=project,
+            correlation_id="corr-project-chat",
+        )
+    )
+
+    assert result.source == "bedrock"
+    assert result.score is None
+    assert result.risk_level is None
+    assert result.recommendations[0].candidate_id is None
 
 
 @pytest.mark.asyncio

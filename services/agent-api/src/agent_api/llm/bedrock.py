@@ -147,7 +147,17 @@ class BedrockExplanationProvider:
     ) -> ModelExplanation:
         """Remove a subject ID mistakenly placed in an advisory candidate field."""
         if request.risk is None:
-            return result
+            recommendations = tuple(
+                recommendation.model_copy(update={"candidate_id": None})
+                for recommendation in result.recommendations
+            )
+            return result.model_copy(
+                update={
+                    "score": None,
+                    "risk_level": None,
+                    "recommendations": recommendations,
+                }
+            )
         recommendations = tuple(
             recommendation.model_copy(update={"candidate_id": None})
             if recommendation.candidate_id == request.risk.subject_id
