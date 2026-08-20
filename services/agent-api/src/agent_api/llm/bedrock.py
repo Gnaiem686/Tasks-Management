@@ -232,6 +232,8 @@ class BedrockExplanationProvider:
         answer = (result.answer or "").strip()
         if not answer:
             raise ValueError("model returned an empty answer")
+        if risk is None:
+            return
         sentence_count = len(re.findall(r"[.!?](?:\s|$)", answer))
         if len(answer) < 180 or sentence_count < 2:
             raise ValueError("model answer was not sufficiently detailed")

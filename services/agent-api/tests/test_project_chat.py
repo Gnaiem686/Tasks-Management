@@ -197,6 +197,37 @@ async def test_project_chat_discards_unsupported_model_score_and_candidate() -> 
 
 
 @pytest.mark.asyncio
+async def test_project_chat_accepts_concise_bedrock_prose() -> None:
+    async def invoke(system_prompt: str, payload: dict[str, object]) -> str:
+        return json.dumps(
+            {
+                "answer": "WRD-8 is blocked; inspect it first.",
+                "summary": "Current project evidence",
+                "root_causes": ["Blocked work"],
+                "recommendations": [],
+                "citations": [],
+                "score": None,
+                "risk_level": None,
+                "uncertainties": [],
+            }
+        )
+
+    provider = BedrockExplanationProvider(
+        invoke=invoke, allow_fallback=False, max_attempts=1
+    )
+    result = await provider.explain(
+        ExplanationRequest(
+            workflow="explain_project_risk",
+            question="What is blocked?",
+            project_snapshot=snapshot(),
+            correlation_id="corr-project-chat",
+        )
+    )
+    assert result.source == "bedrock"
+    assert result.answer == "WRD-8 is blocked; inspect it first."
+
+
+@pytest.mark.asyncio
 async def test_deterministic_fallback_refuses_project_chat() -> None:
     with pytest.raises(ValueError, match="requires a risk result"):
         await DeterministicFallbackProvider().explain(
