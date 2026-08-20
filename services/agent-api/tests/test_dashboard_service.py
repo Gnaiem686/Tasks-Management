@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 from agent_api.dashboard.service import DashboardService, WorkforceProfile
-from workforce_contracts.jira import JiraAccountRef, JiraIssueEvidence
+from workforce_contracts.jira import JiraAccountRef, JiraIssueEvidence, JiraIssueLink
 
 
 def issue(
@@ -15,6 +15,7 @@ def issue(
     name: str = "Mohammad Gnaiem",
     status: str = "In Progress",
     remaining: int | None = 10_800,
+    links: tuple[JiraIssueLink, ...] = (),
 ) -> JiraIssueEvidence:
     return JiraIssueEvidence(
         environment="test",
@@ -29,6 +30,7 @@ def issue(
         original_estimate_seconds=14_400,
         remaining_estimate_seconds=remaining,
         activity_timestamp=datetime(2026, 8, 20, tzinfo=UTC),
+        links=links,
     )
 
 
@@ -107,3 +109,33 @@ async def test_dashboard_marks_missing_estimate_without_guessing() -> None:
     assert "WFD-14.remaining_estimate" in snapshot.missing_evidence
     assert snapshot.employees[0].score is None
     assert snapshot.employees[0].level == "insufficient-data"
+
+
+@pytest.mark.asyncio
+async def test_dashboard_distinguishes_blocked_tasks_from_downstream_impact() -> None:
+    service = DashboardService(
+        jira=JiraReader(
+            (
+                issue(
+                    "WFD-4",
+                    links=(
+                        JiraIssueLink(relationship="is blocked by", issue_key="WFD-2"),
+                    ),
+                ),
+                issue(
+                    "WFD-2",
+                    links=(JiraIssueLink(relationship="blocks", issue_key="WFD-4"),),
+                ),
+            )
+        ),
+        scoring=Scorer(),
+        profiles={},
+        jira_site_url="https://example.atlassian.net",
+        today=lambda: date(2026, 8, 20),
+    )
+
+    snapshot = await service.build("WFD", "corr-dashboard")
+
+    assert snapshot.employees[0].top_risk == (
+        "WFD-4 is blocked by WFD-2; WFD-2 blocks downstream task WFD-4."
+    )

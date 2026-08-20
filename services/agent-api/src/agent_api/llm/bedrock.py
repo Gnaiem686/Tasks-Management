@@ -29,6 +29,12 @@ name the relevant task keys and summaries, their status and priority, exact due
 dates, remaining hours, blockers and dependencies, and compare total remaining
 hours with available capacity. Lead with urgency and give the manager's first
 practical action. Do not invent a task fact that is absent from work_situation.
+For project_snapshot tasks, distinguish these facts precisely: blocker is an
+explicit blocker category; a dependency reading "is blocked by: X" means the
+task cannot proceed because of X; "blocks: X" means the task affects X
+downstream but is not itself blocked. When asked which tasks are blocked, include
+explicit blockers and "is blocked by" dependencies, name their task keys and
+blocking task keys, and never answer "no blockers" when either is present.
 When historical_comparison is supplied, state the earlier and later observation
 times and explain the exact workload, task, and blocker changes.
 Name the strongest supplied contributors and explain how they

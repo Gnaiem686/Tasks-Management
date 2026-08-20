@@ -260,7 +260,19 @@ class DashboardService:
     ) -> str:
         today = self._today()
         overdue = sum(row.due_date is not None and row.due_date < today for row in rows)
-        blocked = sum(self._blocker(row) is not None or bool(row.links) for row in rows)
+        dependency_facts: list[str] = []
+        for row in rows:
+            blocker = self._blocker(row)
+            if blocker is not None:
+                dependency_facts.append(f"{row.key} has blocker {blocker}")
+            for link in row.links:
+                relationship = link.relationship.casefold().strip()
+                if relationship == "is blocked by":
+                    dependency_facts.append(f"{row.key} is blocked by {link.issue_key}")
+                elif relationship == "blocks":
+                    dependency_facts.append(
+                        f"{row.key} blocks downstream task {link.issue_key}"
+                    )
         if remaining is None:
             return "One or more active tasks is missing a remaining estimate."
         if profile and remaining > profile.capacity_hours:
@@ -270,6 +282,6 @@ class DashboardService:
             )
         if overdue:
             return f"{overdue} active task(s) are overdue."
-        if blocked:
-            return f"{blocked} active task(s) have blocker or dependency impact."
+        if dependency_facts:
+            return "; ".join(dependency_facts) + "."
         return "Current structured workload evidence is within configured capacity."
