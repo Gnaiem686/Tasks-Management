@@ -1,6 +1,7 @@
 import json
 import subprocess
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -86,7 +87,9 @@ class Element {{
 
   remove() {{
     if (!this.parentNode) return;
-    this.parentNode.children = this.parentNode.children.filter((child) => child !== this);
+    this.parentNode.children = this.parentNode.children.filter(
+      (child) => child !== this
+    );
     this.parentNode = null;
   }}
 
@@ -261,7 +264,7 @@ console.log(JSON.stringify({{
         check=False,
     )
     assert completed.returncode == 0, completed.stderr
-    return json.loads(completed.stdout)
+    return cast(dict[str, object], json.loads(completed.stdout))
 
 
 @pytest.mark.ui
@@ -275,19 +278,21 @@ def test_public_dashboard_only_posts_chat_reads() -> None:
 @pytest.mark.ui
 def test_chat_replaces_raw_503_status_with_friendly_availability_copy() -> None:
     result = _run_chat_failure_runtime("http-503")
+    messages = cast(list[dict[str, str]], result["messages"])
 
-    assert result["messages"][-1]["className"] == "error-message"
-    assert "Request failed (503)" not in result["messages"][-1]["text"]
-    assert "corr-ui-503" in result["messages"][-1]["text"]
+    assert messages[-1]["className"] == "error-message"
+    assert "Request failed (503)" not in messages[-1]["text"]
+    assert "corr-ui-503" in messages[-1]["text"]
 
 
 @pytest.mark.ui
 def test_chat_hides_raw_fetch_rejection_text() -> None:
     result = _run_chat_failure_runtime("fetch-reject")
+    messages = cast(list[dict[str, str]], result["messages"])
 
-    assert result["messages"][-1]["className"] == "error-message"
-    assert "Failed to fetch" not in result["messages"][-1]["text"]
-    assert result["messages"][-1]["text"] == (
+    assert messages[-1]["className"] == "error-message"
+    assert "Failed to fetch" not in messages[-1]["text"]
+    assert messages[-1]["text"] == (
         "The AI assistant is temporarily unavailable right now. "
         "Please try again in a moment."
     )
@@ -305,7 +310,8 @@ def test_chat_hides_raw_json_parse_errors_and_keeps_correlation(
     mode: str, forbidden: str
 ) -> None:
     result = _run_chat_failure_runtime(mode)
+    messages = cast(list[dict[str, str]], result["messages"])
 
-    assert result["messages"][-1]["className"] == "error-message"
-    assert forbidden not in result["messages"][-1]["text"]
-    assert "corr-ui-503" in result["messages"][-1]["text"]
+    assert messages[-1]["className"] == "error-message"
+    assert forbidden not in messages[-1]["text"]
+    assert "corr-ui-503" in messages[-1]["text"]

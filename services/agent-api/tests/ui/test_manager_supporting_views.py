@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -25,7 +26,11 @@ def _snapshot(
             "remaining_hours": 18 + index,
             "active_tasks": 2 + index,
             "score": 35 + index,
-            "level": "high" if index % 3 == 0 else "medium" if index % 2 == 0 else "low",
+            "level": "high"
+            if index % 3 == 0
+            else "medium"
+            if index % 2 == 0
+            else "low",
             "top_risk": f"Risk {index}",
         }
         for index in range(1, employee_count + 1)
@@ -249,7 +254,10 @@ global.history = {{ replaceState() {{}} }};
 global.location = {{ search: "" }};
 global.fetch = async (path) => {{
   if (path === "/api/v1/projects") {{
-    return {{ ok: true, json: async () => ({{ items: [{{ key: "WFD", name: "Workforce Real Data" }}] }}) }};
+    return {{
+      ok: true,
+      json: async () => ({{ items: [{{ key: "WFD", name: "Workforce Real Data" }}] }}),
+    }};
   }}
   if (String(path).startsWith("/api/v1/dashboard?")) {{
     return {{ ok: true, json: async () => snapshot }};
@@ -302,7 +310,7 @@ console.log(JSON.stringify(result));
         check=False,
     )
     assert completed.returncode == 0, completed.stderr
-    return json.loads(completed.stdout)
+    return cast(dict[str, object], json.loads(completed.stdout))
 
 
 @pytest.mark.ui
@@ -310,6 +318,10 @@ def test_dashboard_runtime_renders_bounded_previews_and_populates_drawers() -> N
     result = _run_dashboard_runtime(
         _snapshot(employee_count=6, alert_count=5, task_count=6)
     )
+    employee_drawer_first = cast(str, result["employee_drawer_first"])
+    alert_drawer_first = cast(str, result["alert_drawer_first"])
+    task_drawer_first = cast(str, result["task_drawer_first"])
+    page_status = cast(str, result["page_status"])
 
     assert result["summary_cards"] == 4
     assert result["employee_rows"] == 5
@@ -320,14 +332,14 @@ def test_dashboard_runtime_renders_bounded_previews_and_populates_drawers() -> N
     assert result["task_view_all_disabled"] is False
     assert result["employee_drawer_title"] == "All employees"
     assert result["employee_drawer_sections"] == 6
-    assert "Employee 1" in result["employee_drawer_first"]
+    assert "Employee 1" in employee_drawer_first
     assert result["alert_drawer_title"] == "All alerts"
     assert result["alert_drawer_sections"] == 5
-    assert "WFD-1" in result["alert_drawer_first"]
+    assert "WFD-1" in alert_drawer_first
     assert result["task_drawer_title"] == "All tasks"
     assert result["task_drawer_sections"] == 6
-    assert "WFD-1 · Task 1" in result["task_drawer_first"]
-    assert "Current project evidence loaded." in result["page_status"]
+    assert "WFD-1 · Task 1" in task_drawer_first
+    assert "Current project evidence loaded." in page_status
 
 
 @pytest.mark.ui

@@ -1,6 +1,7 @@
 import json
 import subprocess
 from pathlib import Path
+from typing import cast
 
 import pytest
 from agent_api.main import app
@@ -99,7 +100,9 @@ class Element {{
 
   remove() {{
     if (!this.parentNode) return;
-    this.parentNode.children = this.parentNode.children.filter((child) => child !== this);
+    this.parentNode.children = this.parentNode.children.filter(
+      (child) => child !== this
+    );
     this.parentNode = null;
   }}
 
@@ -222,7 +225,11 @@ global.fetch = async (path) => {{
       status: investigationStatus,
       headers: {{
         get(name) {{
-          return investigationHeaders[name] ?? investigationHeaders[name.toLowerCase()] ?? null;
+          return (
+            investigationHeaders[name]
+            ?? investigationHeaders[name.toLowerCase()]
+            ?? null
+          );
         }},
       }},
       json: async () => investigationPayload,
@@ -259,7 +266,7 @@ console.log(JSON.stringify({{
         check=False,
     )
     assert completed.returncode == 0, completed.stderr
-    return json.loads(completed.stdout)
+    return cast(dict[str, object], json.loads(completed.stdout))
 
 
 @pytest.mark.ui
@@ -305,8 +312,9 @@ def test_bedrock_chat_preserves_answer_and_hides_raw_citations() -> None:
             }
         }
     )
+    messages = cast(list[dict[str, str]], result["messages"])
 
-    assert result["messages"][-1]["className"] == "assistant-message"
-    assert result["messages"][-1]["text"] == answer
-    assert "jira:WFD-13:summary" not in json.dumps(result["messages"])
-    assert "Evidence:" not in json.dumps(result["messages"])
+    assert messages[-1]["className"] == "assistant-message"
+    assert messages[-1]["text"] == answer
+    assert "jira:WFD-13:summary" not in json.dumps(messages)
+    assert "Evidence:" not in json.dumps(messages)

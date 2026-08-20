@@ -4,8 +4,8 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
-import pytest
 import agent_api.graph.supervisor as supervisor
+import pytest
 from agent_api.auth.roles import ApplicationRole
 from agent_api.dashboard.models import (
     DashboardSnapshot,
