@@ -172,7 +172,7 @@ def test_dev_smoke_and_release_record_cover_required_evidence() -> None:
 
 def test_dev_smoke_uses_the_public_dashboard_for_jira_evidence() -> None:
     smoke = (ROOT / "scripts" / "validation" / "smoke_dev.sh").read_text()
-    assert 'dashboard?project_key=WRD' in smoke
+    assert "dashboard?project_key=WRD" in smoke
     assert '.project.key == "WRD"' in smoke
 
 
