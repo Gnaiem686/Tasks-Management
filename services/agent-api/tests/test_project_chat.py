@@ -277,6 +277,67 @@ async def test_project_chat_accepts_concise_bedrock_prose() -> None:
 
 
 @pytest.mark.asyncio
+async def test_deadline_question_retries_generic_answer_without_task_keys() -> None:
+    attempts = 0
+
+    async def invoke(system_prompt: str, payload: dict[str, object]) -> str:
+        nonlocal attempts
+        attempts += 1
+        answer = (
+            "Tasks with dependencies and blockers are most likely to miss deadlines."
+            if attempts == 1
+            else (
+                "WRD-8 is most likely to miss its deadline; it is blocked and due soon."
+            )
+        )
+        return json.dumps(
+            {
+                "answer": answer,
+                "summary": "Deadline risk",
+                "root_causes": ["Blocked work"],
+                "recommendations": [],
+                "citations": ["jira:WRD-8:summary"],
+                "score": None,
+                "risk_level": None,
+                "uncertainties": [],
+            }
+        )
+
+    provider = BedrockExplanationProvider(
+        invoke=invoke, allow_fallback=False, max_attempts=2
+    )
+    project_data = snapshot().model_dump()
+    project_data["tasks"] = (
+        {
+            "key": "WRD-8",
+            "summary": "Database migration",
+            "status": "Blocked",
+            "priority": "Highest",
+            "assignee_id": None,
+            "assignee_name": None,
+            "due_date": None,
+            "original_hours": None,
+            "remaining_hours": None,
+            "required_skills": (),
+            "blocker": "Technical blocker",
+            "dependencies": (),
+            "jira_url": "https://example.atlassian.net/browse/WRD-8",
+        },
+    )
+    result = await provider.explain(
+        ExplanationRequest(
+            workflow="explain_project_risk",
+            question="Which tasks are most likely to miss their deadlines?",
+            project_snapshot=DashboardSnapshot.model_validate(project_data),
+            correlation_id="corr-project-chat",
+        )
+    )
+
+    assert attempts == 2
+    assert "WRD-8" in result.answer
+
+
+@pytest.mark.asyncio
 async def test_deterministic_fallback_refuses_project_chat() -> None:
     with pytest.raises(ValueError, match="requires a risk result"):
         await DeterministicFallbackProvider().explain(

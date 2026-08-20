@@ -29,6 +29,11 @@ name the relevant task keys and summaries, their status and priority, exact due
 dates, remaining hours, blockers and dependencies, and compare total remaining
 hours with available capacity. Lead with urgency and give the manager's first
 practical action. Do not invent a task fact that is absent from work_situation.
+When the manager asks which tasks may miss deadlines, name the specific task
+keys and summaries. For each selected task, state its exact supplied due date,
+status, remaining hours when available, priority, and any blocker or dependency
+that makes the deadline risky. Rank the most urgent task first; never answer
+only with generic categories such as "tasks with blockers."
 For project_snapshot tasks, distinguish these facts precisely: blocker is an
 explicit blocker category; a dependency reading "is blocked by: X" means the
 task cannot proceed because of X; "blocks: X" means the task affects X
@@ -115,12 +120,17 @@ class BedrockExplanationProvider:
                 if self._failures >= self._failure_threshold:
                     self._opened_at = time.monotonic()
                 if attempt + 1 < self._max_attempts:
-                    candidate_correction = (
+                    correction = (
                         " candidate_id must be null because no reassignment "
                         "candidate was supplied."
                         if str(error) == "model invented reassignment candidate"
                         else ""
                     )
+                    if str(error) == "model omitted concrete Jira task evidence":
+                        correction += (
+                            " Name at least one supplied Jira task key and explain "
+                            "its concrete deadline evidence."
+                        )
                     payload = {
                         **payload,
                         "revision_required": (
@@ -129,7 +139,7 @@ class BedrockExplanationProvider:
                             "strongest contributors and lowest-impact factors "
                             "explicitly, explain why the result is not higher, and "
                             "do not say 'other factors' or disclose factor points."
-                            + candidate_correction
+                            + correction
                         ),
                     }
                     await asyncio.sleep(min(0.05 * (2**attempt), 0.2))
@@ -238,6 +248,16 @@ class BedrockExplanationProvider:
         answer = (result.answer or "").strip()
         if not answer:
             raise ValueError("model returned an empty answer")
+        if request.project_snapshot is not None and any(
+            term in request.question.casefold()
+            for term in ("deadline", "due date", "due tomorrow", "due soon")
+        ):
+            known_tasks = {task.key for task in request.project_snapshot.tasks}
+            mentioned_tasks = set(
+                re.findall(r"\b[A-Z][A-Z0-9]{1,19}-\d+\b", answer.upper())
+            )
+            if not mentioned_tasks or not mentioned_tasks.issubset(known_tasks):
+                raise ValueError("model omitted concrete Jira task evidence")
         if risk is None:
             return
         sentence_count = len(re.findall(r"[.!?](?:\s|$)", answer))
