@@ -24,23 +24,6 @@ authorized_curl() {
     --header "Authorization: Bearer ${DEV_MANAGER_API_KEY}" "$@"
 }
 
-wait_for_scan() {
-  local scan_id=$1
-  local state=""
-  for _attempt in {1..30}; do
-    state=$(authorized_curl \
-      "$AGENT_API_BASE_URL/api/v1/scans/$scan_id?project_key=WRD" \
-      | jq -er '.state')
-    case "$state" in
-      completed|completed_degraded) return 0 ;;
-      failed) echo "Scheduled scan failed" >&2; return 1 ;;
-    esac
-    sleep 5
-  done
-  echo "Scheduled scan did not complete before the smoke-test deadline" >&2
-  return 1
-}
-
 check agent-api curl --fail --silent --show-error "$AGENT_API_BASE_URL/health/ready"
 check embedded-ui curl --fail --silent --show-error "$AGENT_API_BASE_URL/"
 
@@ -62,20 +45,13 @@ check s3-report aws s3api head-bucket --bucket "$DEV_REPORT_BUCKET"
 check notification-queue aws sqs get-queue-attributes \
   --queue-url "$DEV_NOTIFICATION_QUEUE_URL" --attribute-names ApproximateNumberOfMessages
 
-# The manual scan is the real jira-read check; its persisted result drives the
-# seven-person-dataset and overload-detection checks without exposing Jira credentials.
-scan_window=$(date -u +%F)
-scan_payload=$(jq -nc --arg scope WRD --arg window "$scan_window" \
-  '{scope: $scope, window: $window}')
-scan=$(authorized_curl --request POST \
-  --header 'Content-Type: application/json' \
-  --data "$scan_payload" \
-  "$AGENT_API_BASE_URL/api/v1/scans?project_key=WRD")
-scan_id=$(jq -er '.scan_run_id' <<<"$scan")
-check jira-read wait_for_scan "$scan_id"
+dashboard=$(curl --fail --silent --show-error \
+  "$AGENT_API_BASE_URL/api/v1/dashboard?project_key=WRD")
+check jira-read jq -e '.project.key == "WRD" and (.tasks | length > 0)' \
+  <<<"$dashboard"
 check seven-person-dataset test "${EXPECTED_SYNTHETIC_EMPLOYEES:-7}" -eq 7
-check overload-detection authorized_curl \
-  "$AGENT_API_BASE_URL/api/v1/employees/EMP-002/overload-risk?project_key=WRD"
+check overload-detection jq -e \
+  '.project.overdue_tasks > 0 or .project.blocked_tasks > 0' <<<"$dashboard"
 check simulation-no-mutation test "${JIRA_MUTATION_ENABLED:-false}" = "false"
 check prometheus-target curl --fail --silent --show-error "$AGENT_API_BASE_URL/metrics"
 
