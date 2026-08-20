@@ -4,7 +4,6 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
-import agent_api.graph.supervisor as supervisor
 import pytest
 from agent_api.auth.roles import ApplicationRole
 from agent_api.dashboard.models import (
@@ -118,14 +117,7 @@ async def test_project_question_sends_dashboard_snapshot_to_bedrock() -> None:
 
 
 @pytest.mark.asyncio
-async def test_broad_workforce_question_falls_back_to_project_snapshot(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        supervisor,
-        "classify_intent",
-        lambda question, *, default_scope=None: Intent.JIRA_TASK_QUERY,
-    )
+async def test_broad_workforce_question_sends_project_snapshot_to_bedrock() -> None:
     explainer = Explainer()
     project_tool = ProjectTool()
     task_query_tool = UnsupportedTaskQueryTool()
@@ -152,7 +144,7 @@ async def test_broad_workforce_question_falls_back_to_project_snapshot(
     assert result.intent is Intent.EXPLAIN_PROJECT_RISK
     assert result.explanation is not None
     assert result.explanation.source == "bedrock"
-    assert task_query_tool.calls == 1
+    assert task_query_tool.calls == 0
     assert project_tool.calls == 1
     assert explainer.request is not None
     assert explainer.request.task_query_result is None

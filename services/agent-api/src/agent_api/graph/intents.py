@@ -54,7 +54,11 @@ def classify_intent(question: str, *, default_scope: str | None = None) -> Inten
         return Intent.JIRA_TASK_QUERY
     if "what if" in text or "simulate" in text:
         return Intent.WHAT_IF_SIMULATION
-    if any(word in text for word in ("candidate", "which employee", "could take")):
+    if (
+        "candidate" in text
+        or "could take" in text
+        or re.search(r"\bwhich employee\b", text) is not None
+    ):
         return Intent.REASSIGNMENT_CANDIDATES
     if "task" in text and any(word in text for word in ("fit", "skill", "appropriate")):
         return Intent.EVALUATE_TASK_FIT

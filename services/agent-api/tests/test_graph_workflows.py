@@ -172,6 +172,7 @@ def context() -> VerifiedAgentContext:
             Intent.EXPLAIN_HISTORY,
         ),
         ("Which employees could take this task?", Intent.REASSIGNMENT_CANDIDATES),
+        ("Which employee could take WRD-8?", Intent.REASSIGNMENT_CANDIDATES),
         ("What if we move this task?", Intent.WHAT_IF_SIMULATION),
         ("Why is the service unhealthy?", Intent.OPERATIONS_DIAGNOSIS),
         ("What is the due date of WRD-4?", Intent.JIRA_TASK_QUERY),
@@ -183,6 +184,17 @@ def context() -> VerifiedAgentContext:
 )
 def test_supported_intents_are_finite(question: str, expected: Intent) -> None:
     assert classify_intent(question) is expected
+
+
+@pytest.mark.unit
+def test_project_scope_routes_broad_workforce_risk_question_to_project_risk() -> None:
+    assert (
+        classify_intent(
+            "Which employees are at risk and why?",
+            default_scope="project",
+        )
+        is Intent.EXPLAIN_PROJECT_RISK
+    )
 
 
 @pytest.mark.unit

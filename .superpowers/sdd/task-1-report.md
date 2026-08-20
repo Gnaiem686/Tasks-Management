@@ -33,3 +33,33 @@ Implemented the project-evidence fallback in `InvestigationWorkflow` so broad wo
 
 - The fallback is intentionally narrow so authorization, transport, and explicit invalid-scope query failures still surface instead of being masked by project chat.
 - No unrelated files were modified.
+
+## Follow-up: deployed classification root cause
+
+- Production debugging showed the original regression test was too artificial: the workflow was never reaching the Jira task-query branch for `"Which employees are at risk and why?"`.
+- Real root cause: `classify_intent(..., default_scope="project")` matched the substring `"which employee"` inside `"which employees"` and returned `Intent.REASSIGNMENT_CANDIDATES` before the project-scope fallback could route the question to project risk.
+
+### Follow-up TDD cycle
+
+1. Added failing tests for the real production path:
+   - `test_project_scope_routes_broad_workforce_risk_question_to_project_risk`
+   - `test_broad_workforce_question_sends_project_snapshot_to_bedrock`
+   - Preserved candidate coverage with `"Which employee could take WRD-8?"`
+2. Ran:
+   - `.venv/bin/pytest -q services/agent-api/tests/test_graph_workflows.py services/agent-api/tests/test_project_chat.py`
+   - Observed failures showing:
+     - `"Which employees are at risk and why?"` classified as `REASSIGNMENT_CANDIDATES`
+     - workflow attempted the core investigation path instead of project chat
+3. Implemented the minimal classifier fix:
+   - narrowed reassignment detection from a loose substring match to bounded candidate phrasing:
+     - `"candidate"`
+     - `"could take"`
+     - regex `\\bwhich employee\\b`
+4. Re-ran the same focused suite:
+   - Result: `33 passed`
+
+### Follow-up files changed
+
+- `services/agent-api/src/agent_api/graph/intents.py`
+- `services/agent-api/tests/test_graph_workflows.py`
+- `services/agent-api/tests/test_project_chat.py`
