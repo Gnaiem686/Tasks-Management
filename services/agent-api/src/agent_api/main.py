@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from agent_api.observability import ApiMetricsMiddleware, api_metrics
 from agent_api.routes.alerts import router as alert_router
 from agent_api.routes.audit import router as audit_router
+from agent_api.routes.dashboard import router as dashboard_router
 from agent_api.routes.investigations import router as investigation_router
 from agent_api.routes.profiles import router as profile_router
 from agent_api.routes.proposals import router as proposal_router
@@ -32,6 +33,7 @@ app.include_router(scan_router)
 app.include_router(alert_router)
 app.include_router(report_router)
 app.include_router(audit_router)
+app.include_router(dashboard_router)
 app.include_router(ui_router)
 app.mount(
     "/static",

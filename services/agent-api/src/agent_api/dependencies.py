@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict
 from workforce_contracts.jira import JiraIssueEvidence
 from workforce_risk.models import EmployeeOverloadInput, RiskResult
 
+from agent_api.project_access import configured_projects
 from agent_api.risk_evidence import JiraRiskEvidenceProvider, RiskEvidenceDossier
 
 
@@ -305,11 +306,10 @@ def get_evidence_provider() -> EmployeeEvidenceProvider:
         environment=environment,
         authorization_header=str(required["JIRA_MCP_AUTHORIZATION"]),
     )
-    project = os.getenv("JIRA_PROJECT_KEY", "WRD")
     jira = JiraEvidenceClient(
         transport=transport,
         environment=environment,
-        allowed_project_keys={project},
+        allowed_project_keys={project.key for project in configured_projects()},
         custom_fields={
             "blocker_category": os.getenv(
                 "JIRA_BLOCKER_CATEGORY_FIELD_ID", "customfield_10042"
