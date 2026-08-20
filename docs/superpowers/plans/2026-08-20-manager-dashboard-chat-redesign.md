@@ -62,8 +62,11 @@
 
 ```python
 def test_configured_projects_parse_safe_allowlist(monkeypatch):
-    monkeypatch.setenv("ALLOWED_JIRA_PROJECTS", "WFD:Workforce Real Data,WRD:Workforce Risk Demo")
+    monkeypatch.setenv(
+        "ALLOWED_JIRA_PROJECTS", "WFD:Workforce Real Data,WRD:Workforce Risk Demo"
+    )
     assert [item.key for item in configured_projects()] == ["WFD", "WRD"]
+
 
 def test_unknown_project_is_rejected(monkeypatch):
     monkeypatch.setenv("ALLOWED_JIRA_PROJECTS", "WFD:Workforce Real Data")
@@ -84,6 +87,7 @@ class ConfiguredProject(BaseModel):
     key: str = Field(pattern=r"^[A-Z][A-Z0-9]{1,19}$")
     name: str = Field(min_length=1, max_length=100)
     mutation_enabled: bool = False
+
 
 def require_configured_project(project_key: str) -> ConfiguredProject:
     return next(
@@ -137,8 +141,11 @@ async def test_dashboard_groups_tasks_by_real_jira_assignee():
     assert snapshot.tasks[0].jira_url.endswith("/browse/WFD-1")
     assert snapshot.correlation_id == "corr-dashboard"
 
+
 async def test_dashboard_marks_missing_estimate_without_guessing():
-    snapshot = await service_with((issue("WFD-14", remaining=None),)).build("WFD", "corr")
+    snapshot = await service_with((issue("WFD-14", remaining=None),)).build(
+        "WFD", "corr"
+    )
     assert snapshot.tasks[0].remaining_hours is None
     assert "WFD-14.remaining_estimate" in snapshot.missing_evidence
 ```
@@ -167,6 +174,7 @@ Reject any returned key outside the selected project. Group normal work items by
 ```python
 @router.get("/projects", response_model=ProjectListResponse)
 async def list_projects() -> ProjectListResponse: ...
+
 
 @router.get("/dashboard", response_model=DashboardSnapshot)
 async def dashboard(project_key: str, request: Request) -> DashboardSnapshot: ...
@@ -210,10 +218,14 @@ async def test_project_question_resolves_employee_and_sends_concrete_tasks_to_be
     assert bedrock_request["evidence"]["tasks"][0]["remaining_hours"] == 3
     assert response.explanation.source == "bedrock"
 
+
 async def test_bedrock_failure_never_returns_deterministic_prose():
     response = await investigate_with_bedrock_timeout("Summarize WFD")
     assert response.status_code == 503
-    assert response.json()["message"] == "The AI assistant is temporarily unavailable. No answer was generated."
+    assert (
+        response.json()["message"]
+        == "The AI assistant is temporarily unavailable. No answer was generated."
+    )
 ```
 
 Also test arbitrary project-wide questions, task keys, employee display names, ambiguity, missing estimates, deadlines, blockers, dependencies, project progress, and prompt injection inside Jira text.
@@ -268,11 +280,20 @@ git commit -m "feat: answer project questions with Bedrock"
 def test_dashboard_has_project_header_cards_detail_drawer_and_persistent_chat():
     html = template()
     for element in (
-        "project-select", "refresh-dashboard", "summary-cards", "team-risk-table",
-        "risk-alerts", "project-progress", "workload-distribution", "detail-drawer",
-        "chat-panel", "chat-messages", "chat-composer",
+        "project-select",
+        "refresh-dashboard",
+        "summary-cards",
+        "team-risk-table",
+        "risk-alerts",
+        "project-progress",
+        "workload-distribution",
+        "detail-drawer",
+        "chat-panel",
+        "chat-messages",
+        "chat-composer",
     ):
         assert f'id="{element}"' in html
+
 
 def test_frontend_contains_no_api_key_control_or_wrapped_secret():
     assert 'id="api-key"' not in template()
