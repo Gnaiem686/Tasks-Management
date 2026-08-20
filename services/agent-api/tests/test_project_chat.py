@@ -5,12 +5,14 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
+import agent_api.graph.supervisor as supervisor
 from agent_api.auth.roles import ApplicationRole
 from agent_api.dashboard.models import (
     DashboardSnapshot,
     ProjectSummary,
     WorkloadDistribution,
 )
+from agent_api.graph.intents import Intent
 from agent_api.graph.state import EntityReferences, VerifiedAgentContext
 from agent_api.graph.workflow import InvestigationWorkflow
 from agent_api.llm.bedrock import BedrockExplanationProvider
@@ -42,7 +44,10 @@ def snapshot() -> DashboardSnapshot:
 
 
 class ProjectTool:
+    calls = 0
+
     async def build(self, project_key: str, correlation_id: str) -> DashboardSnapshot:
+        self.calls += 1
         assert project_key == "WFD"
         assert correlation_id == "corr-project-chat"
         return snapshot()
@@ -53,6 +58,16 @@ class CoreTool:
         self, intent: Any, references: Any, correlation_id: str
     ) -> Any:
         raise AssertionError("project chat must not fabricate an employee risk")
+
+
+class UnsupportedTaskQueryTool:
+    calls = 0
+
+    async def query(
+        self, question: str, references: EntityReferences, correlation_id: str
+    ) -> Any:
+        self.calls += 1
+        raise ValueError("employee is required for a deadline task query")
 
 
 class Explainer:
@@ -100,6 +115,48 @@ async def test_project_question_sends_dashboard_snapshot_to_bedrock() -> None:
     assert explainer.request is not None
     assert explainer.request.project_snapshot is not None
     assert explainer.request.project_snapshot.project.total_tasks == 15
+
+
+@pytest.mark.asyncio
+async def test_broad_workforce_question_falls_back_to_project_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        supervisor,
+        "classify_intent",
+        lambda question, *, default_scope=None: Intent.JIRA_TASK_QUERY,
+    )
+    explainer = Explainer()
+    project_tool = ProjectTool()
+    task_query_tool = UnsupportedTaskQueryTool()
+    workflow = InvestigationWorkflow(
+        tool=CoreTool(),
+        task_query_tool=task_query_tool,
+        project_tool=project_tool,
+        explainer=explainer,
+    )
+
+    result = await workflow.run(
+        verified_context=VerifiedAgentContext(
+            subject_reference="anonymous-demo-viewer",
+            roles=(ApplicationRole.VIEWER,),
+            environment="test",
+            authorized_jira_sites=("site",),
+            authorized_project_keys=("WFD",),
+            correlation_id="corr-project-chat",
+        ),
+        question="Which employees are at risk and why?",
+        references=EntityReferences(project_key="WFD"),
+    )
+
+    assert result.intent is Intent.EXPLAIN_PROJECT_RISK
+    assert result.explanation is not None
+    assert result.explanation.source == "bedrock"
+    assert task_query_tool.calls == 1
+    assert project_tool.calls == 1
+    assert explainer.request is not None
+    assert explainer.request.task_query_result is None
+    assert explainer.request.project_snapshot is not None
 
 
 @pytest.mark.asyncio

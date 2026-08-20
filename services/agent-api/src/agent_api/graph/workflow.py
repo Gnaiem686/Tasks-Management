@@ -26,6 +26,14 @@ from agent_api.llm.schemas import ExplanationRequest
 from agent_api.risk_evidence import RiskEvidenceDossier
 from agent_api.task_queries import TaskQueryResult
 
+_UNSUPPORTED_TASK_QUERY_ERRORS = frozenset(
+    {
+        "employee is required for a deadline task query",
+        "only an explicit tomorrow deadline is supported",
+        "unsupported Jira task query question",
+    }
+)
+
 
 class InvestigationTool(Protocol):
     async def investigate(
@@ -126,11 +134,29 @@ class InvestigationWorkflow:
         if state["intent"] is Intent.JIRA_TASK_QUERY:
             if self._task_query_tool is None:
                 raise ValueError("Jira task query tool is unavailable")
-            result = await self._task_query_tool.query(
-                state["question"],
-                state["references"],
-                state["verified_context"].correlation_id,
-            )
+            try:
+                result = await self._task_query_tool.query(
+                    state["question"],
+                    state["references"],
+                    state["verified_context"].correlation_id,
+                )
+            except ValueError as exc:
+                if str(exc) not in _UNSUPPORTED_TASK_QUERY_ERRORS:
+                    raise
+                if self._project_tool is None:
+                    raise ValueError("project evidence is unavailable") from exc
+                if state["tool_calls_used"] + 1 >= self._max_tool_calls:
+                    raise RuntimeError("investigation tool-call limit reached") from exc
+                snapshot = await self._project_tool.build(
+                    state["references"].project_key,
+                    state["verified_context"].correlation_id,
+                )
+                return {
+                    "intent": Intent.EXPLAIN_PROJECT_RISK,
+                    "project_snapshot": snapshot,
+                    "steps_used": state["steps_used"] + 1,
+                    "tool_calls_used": state["tool_calls_used"] + 2,
+                }
             return {
                 "task_query_result": TaskQueryResult.model_validate(result),
                 "steps_used": state["steps_used"] + 1,
