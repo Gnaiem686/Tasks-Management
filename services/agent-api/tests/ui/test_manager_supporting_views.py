@@ -364,5 +364,6 @@ def test_tables_and_status_are_accessible() -> None:
     assert 'aria-live="polite"' in html
     assert ":focus-visible" in styles
     assert ".risk-state-good{" in styles
+    assert ".risk-state-unknown{" in styles
     assert ".risk-state-warning{" in styles
     assert ".risk-state-critical{" in styles

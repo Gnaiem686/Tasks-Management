@@ -56,6 +56,7 @@ function formatHours(value,fallback="Unknown"){
 function riskStateClass(level){
   if(["high","critical"].includes(level))return "risk-state-critical";
   if(level==="medium")return "risk-state-warning";
+  if(level==="insufficient-data")return "risk-state-unknown";
   return "risk-state-good";
 }
 

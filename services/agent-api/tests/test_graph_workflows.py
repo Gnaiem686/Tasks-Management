@@ -172,6 +172,7 @@ def context() -> VerifiedAgentContext:
             Intent.EXPLAIN_HISTORY,
         ),
         ("Which employees could take this task?", Intent.REASSIGNMENT_CANDIDATES),
+        ("Which employees can take this task?", Intent.REASSIGNMENT_CANDIDATES),
         ("Which employee could take WRD-8?", Intent.REASSIGNMENT_CANDIDATES),
         ("What if we move this task?", Intent.WHAT_IF_SIMULATION),
         ("Why is the service unhealthy?", Intent.OPERATIONS_DIAGNOSIS),

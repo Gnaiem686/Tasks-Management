@@ -137,7 +137,8 @@ tbody tr:hover{background:#f8fafc}
   font-weight:800;
   font-size:.78rem;
 }
-.risk-chip.low,.risk-chip.insufficient-data,.risk-state-good{background:var(--good-bg);color:var(--good-text)}
+.risk-chip.low,.risk-state-good{background:var(--good-bg);color:var(--good-text)}
+.risk-chip.insufficient-data,.risk-state-unknown{background:#eef2f7;color:#526173}
 .risk-chip.medium,.risk-state-warning{background:var(--warning-bg);color:var(--warning-text)}
 .risk-chip.high,.risk-chip.critical,.risk-state-critical{background:var(--critical-bg);color:var(--critical-text)}
 .meter{
