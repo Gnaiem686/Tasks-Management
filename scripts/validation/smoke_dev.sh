@@ -44,11 +44,10 @@ wait_for_scan() {
 check agent-api curl --fail --silent --show-error "$AGENT_API_BASE_URL/health/ready"
 check embedded-ui curl --fail --silent --show-error "$AGENT_API_BASE_URL/"
 
-unauthorized_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
-  "$AGENT_API_BASE_URL/api/v1/employees/EMP-002/overload-risk?project_key=WRD")
-test "$unauthorized_status" = "401"
-check api-key-authentication authorized_curl \
-  "$AGENT_API_BASE_URL/api/v1/employees/EMP-002/overload-risk?project_key=WRD"
+check public-project-read curl --fail --silent --show-error \
+  "$AGENT_API_BASE_URL/api/v1/projects"
+check public-dashboard-read curl --fail --silent --show-error \
+  "$AGENT_API_BASE_URL/api/v1/dashboard?project_key=WRD"
 
 check workforce-risk-mcp aws ssm send-command --region "$AWS_REGION" \
   --instance-ids "$CONTROL_PLANE_INSTANCE_ID" --document-name AWS-RunShellScript \

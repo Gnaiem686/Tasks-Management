@@ -145,7 +145,11 @@ async def test_project_chat_discards_unsupported_model_score_and_candidate() -> 
                         "candidate_id": "invented-user",
                     }
                 ],
-                "citations": ["jira:WRD-8:summary"],
+                "citations": [
+                    "jira:WRD-8:summary",
+                    "jira:WRD-8:updated",
+                    "jira:WRD-8:labels",
+                ],
                 "score": 80,
                 "risk_level": "high",
                 "uncertainties": ["Missing estimates"],

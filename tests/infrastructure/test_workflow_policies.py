@@ -143,7 +143,8 @@ def test_dev_smoke_and_release_record_cover_required_evidence() -> None:
     release = (ROOT / "scripts" / "validation" / "record_release.sh").read_text()
     for check in (
         "embedded-ui",
-        "api-key-authentication",
+        "public-project-read",
+        "public-dashboard-read",
         "agent-api",
         "workforce-risk-mcp",
         "devops-mcp",

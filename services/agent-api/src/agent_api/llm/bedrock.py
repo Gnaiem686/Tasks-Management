@@ -184,6 +184,8 @@ class BedrockExplanationProvider:
                         "status",
                         "priority",
                         "duedate",
+                        "updated",
+                        "labels",
                         "timeestimate",
                         "issuelinks",
                     )
