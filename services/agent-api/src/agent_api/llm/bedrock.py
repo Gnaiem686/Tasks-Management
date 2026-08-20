@@ -147,6 +147,23 @@ class BedrockExplanationProvider:
     ) -> ModelExplanation:
         """Remove a subject ID mistakenly placed in an advisory candidate field."""
         if request.risk is None:
+            allowed_citations: set[str] = set()
+            if request.project_snapshot is not None:
+                for task in request.project_snapshot.tasks:
+                    allowed_citations.update(
+                        f"jira:{task.key}:{field}"
+                        for field in (
+                            "summary",
+                            "status",
+                            "priority",
+                            "duedate",
+                            "updated",
+                            "labels",
+                            "timeestimate",
+                            "issuelinks",
+                            "customfield_10042",
+                        )
+                    )
             recommendations = tuple(
                 recommendation.model_copy(update={"candidate_id": None})
                 for recommendation in result.recommendations
@@ -156,6 +173,11 @@ class BedrockExplanationProvider:
                     "score": None,
                     "risk_level": None,
                     "recommendations": recommendations,
+                    "citations": tuple(
+                        citation
+                        for citation in result.citations
+                        if citation in allowed_citations
+                    ),
                 }
             )
         recommendations = tuple(

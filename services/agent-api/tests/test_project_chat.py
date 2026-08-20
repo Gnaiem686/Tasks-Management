@@ -149,6 +149,7 @@ async def test_project_chat_discards_unsupported_model_score_and_candidate() -> 
                     "jira:WRD-8:summary",
                     "jira:WRD-8:updated",
                     "jira:WRD-8:labels",
+                    "jira:OTHER-1:summary",
                 ],
                 "score": 80,
                 "risk_level": "high",
@@ -192,6 +193,7 @@ async def test_project_chat_discards_unsupported_model_score_and_candidate() -> 
     assert result.score is None
     assert result.risk_level is None
     assert result.recommendations[0].candidate_id is None
+    assert "jira:OTHER-1:summary" not in result.citations
 
 
 @pytest.mark.asyncio
