@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from typing import Any
 
 import pytest
 from agent_api.dashboard.service import DashboardService, WorkforceProfile
@@ -35,7 +36,9 @@ class JiraReader:
     def __init__(self, issues: tuple[JiraIssueEvidence, ...]) -> None:
         self.issues = issues
 
-    async def search_issues(self, jql: str, *, project_key: str, correlation_id: str):
+    async def search_issues(
+        self, jql: str, *, project_key: str, correlation_id: str
+    ) -> tuple[JiraIssueEvidence, ...]:
         assert jql == 'project = "WFD" ORDER BY updated DESC, key ASC'
         assert project_key == "WFD"
         assert correlation_id == "corr-dashboard"
@@ -43,7 +46,7 @@ class JiraReader:
 
 
 class Scorer:
-    async def score(self, input_data, correlation_id: str):
+    async def score(self, input_data: Any, correlation_id: str) -> dict[str, Any]:
         return {
             "score": 88,
             "level": "critical",

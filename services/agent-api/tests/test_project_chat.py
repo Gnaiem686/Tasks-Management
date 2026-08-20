@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
+from agent_api.auth.roles import ApplicationRole
 from agent_api.dashboard.models import (
     DashboardSnapshot,
     ProjectSummary,
@@ -39,21 +41,23 @@ def snapshot() -> DashboardSnapshot:
 
 
 class ProjectTool:
-    async def build(self, project_key: str, correlation_id: str):
+    async def build(self, project_key: str, correlation_id: str) -> DashboardSnapshot:
         assert project_key == "WFD"
         assert correlation_id == "corr-project-chat"
         return snapshot()
 
 
 class CoreTool:
-    async def investigate(self, intent, references, correlation_id):
+    async def investigate(
+        self, intent: Any, references: Any, correlation_id: str
+    ) -> Any:
         raise AssertionError("project chat must not fabricate an employee risk")
 
 
 class Explainer:
-    request = None
+    request: ExplanationRequest | None = None
 
-    async def explain(self, request):
+    async def explain(self, request: ExplanationRequest) -> ExplanationResponse:
         self.request = request
         return ExplanationResponse(
             answer="WFD has 14 active tasks, including two overdue tasks.",
@@ -79,7 +83,7 @@ async def test_project_question_sends_dashboard_snapshot_to_bedrock() -> None:
     result = await workflow.run(
         verified_context=VerifiedAgentContext(
             subject_reference="anonymous-demo-viewer",
-            roles=("viewer",),
+            roles=(ApplicationRole.VIEWER,),
             environment="test",
             authorized_jira_sites=("site",),
             authorized_project_keys=("WFD",),
@@ -92,12 +96,14 @@ async def test_project_question_sends_dashboard_snapshot_to_bedrock() -> None:
     assert result.explanation is not None
     assert result.explanation.source == "bedrock"
     assert result.risk is None
+    assert explainer.request is not None
+    assert explainer.request.project_snapshot is not None
     assert explainer.request.project_snapshot.project.total_tasks == 15
 
 
 @pytest.mark.asyncio
 async def test_bedrock_only_mode_never_returns_deterministic_prose() -> None:
-    async def unavailable(system_prompt, payload):
+    async def unavailable(system_prompt: str, payload: dict[str, object]) -> str:
         raise OSError("unavailable")
 
     provider = BedrockExplanationProvider(

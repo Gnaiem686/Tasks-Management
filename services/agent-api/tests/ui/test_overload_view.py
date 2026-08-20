@@ -6,7 +6,7 @@ WEB = Path(__file__).parents[2] / "src" / "agent_api" / "web"
 
 
 @pytest.mark.ui
-def test_dashboard_renders_one_employee_score_without_factor_scores():
+def test_dashboard_renders_one_employee_score_without_factor_scores() -> None:
     script = (WEB / "static" / "chat.js").read_text()
     assert "employee.score" in script
     assert "riskChip" in script
@@ -15,7 +15,7 @@ def test_dashboard_renders_one_employee_score_without_factor_scores():
 
 
 @pytest.mark.ui
-def test_risk_state_does_not_depend_on_color_alone():
+def test_risk_state_does_not_depend_on_color_alone() -> None:
     script = (WEB / "static" / "chat.js").read_text()
     styles = (WEB / "static" / "styles.css").read_text()
     assert "`${level} · ${score}/100`" in script
