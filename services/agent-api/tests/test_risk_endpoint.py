@@ -17,6 +17,7 @@ from agent_api.dependencies import (
     get_scoring_client,
 )
 from agent_api.llm.factory import get_explanation_provider
+from agent_api.llm.schemas import ExplanationRequest, ExplanationResponse
 from agent_api.main import app
 from agent_api.routes.investigations import get_investigator
 from httpx import ASGITransport, AsyncClient, Response
@@ -132,6 +133,23 @@ class JiraClient:
         return (await self.get_issue("WRD-4", correlation_id=correlation_id),)
 
 
+class BedrockTaskExplainer:
+    async def explain(self, request: ExplanationRequest) -> ExplanationResponse:
+        assert request.task_query_result is not None
+        return ExplanationResponse(
+            answer="WRD-4 is due on the date returned by Jira.",
+            summary="WRD-4 deadline",
+            root_causes=(),
+            recommendations=(),
+            citations=request.task_query_result.evidence_references,
+            score=None,
+            risk_level=None,
+            uncertainties=(),
+            source="bedrock",
+            correlation_id=request.correlation_id,
+        )
+
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_investigation_due_date_question_returns_jira_mcp_fact() -> None:
@@ -143,7 +161,9 @@ async def test_investigation_due_date_question_returns_jira_mcp_fact() -> None:
     )
     app.dependency_overrides[get_evidence_provider] = dependency_returning(provider)
     app.dependency_overrides[get_scoring_client] = dependency_returning(ScoringClient())
-    app.dependency_overrides[get_explanation_provider] = dependency_returning(object())
+    app.dependency_overrides[get_explanation_provider] = dependency_returning(
+        BedrockTaskExplainer()
+    )
 
     response = await api_post(
         "/api/v1/investigations?project_key=WRD",
@@ -160,8 +180,10 @@ async def test_investigation_due_date_question_returns_jira_mcp_fact() -> None:
     body = response.json()
     assert body["intent"] == "jira_task_query"
     assert body["risk"] is None
-    assert body["explanation"]["source"] == "jira_mcp"
-    assert body["explanation"]["answer"].startswith("WRD-4 is due on ")
+    assert body["explanation"]["source"] == "bedrock"
+    assert body["explanation"]["answer"] == (
+        "WRD-4 is due on the date returned by Jira."
+    )
 
 
 @pytest.mark.unit

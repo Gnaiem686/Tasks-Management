@@ -87,6 +87,19 @@ class CapturingExplainer(Explainer):
 
     async def explain(self, request: ExplanationRequest) -> ExplanationResponse:
         self.request = request
+        if request.task_query_result is not None:
+            return ExplanationResponse(
+                answer="captured",
+                summary="captured",
+                root_causes=(),
+                recommendations=(),
+                citations=request.task_query_result.evidence_references,
+                score=None,
+                risk_level=None,
+                uncertainties=(),
+                source="bedrock",
+                correlation_id=request.correlation_id,
+            )
         return await super().explain(request)
 
 
@@ -259,10 +272,11 @@ async def test_historical_question_uses_immutable_snapshot_context() -> None:
 async def test_task_due_date_uses_jira_query_not_risk_scoring() -> None:
     risk_tool = Tool()
     query_tool = TaskQueryTool()
+    explainer = CapturingExplainer()
     workflow = InvestigationWorkflow(
         tool=risk_tool,
         task_query_tool=query_tool,
-        explainer=Explainer(),
+        explainer=explainer,
     )
     result = await workflow.run(
         verified_context=context(),
@@ -272,9 +286,12 @@ async def test_task_due_date_uses_jira_query_not_risk_scoring() -> None:
     assert result.intent is Intent.JIRA_TASK_QUERY
     assert result.risk is None
     assert result.explanation is not None
-    assert result.explanation.answer == "WRD-4 is due on 2026-08-17."
-    assert result.explanation.source == "jira_mcp"
+    assert result.explanation.answer == "captured"
+    assert result.explanation.source == "bedrock"
     assert result.explanation.citations == ("jira:WRD-4:duedate",)
+    assert explainer.request is not None
+    assert explainer.request.task_query_result is not None
+    assert explainer.request.task_query_result.tasks[0].key == "WRD-4"
     assert risk_tool.calls == 0
     assert query_tool.calls == 1
 

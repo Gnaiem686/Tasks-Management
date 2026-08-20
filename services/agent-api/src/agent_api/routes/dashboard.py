@@ -33,7 +33,7 @@ class ProjectListResponse(BaseModel):
     items: tuple[ConfiguredProject, ...]
 
 
-def _profiles() -> dict[str, WorkforceProfile]:
+def load_workforce_profiles() -> dict[str, WorkforceProfile]:
     raw = os.getenv("WORKFORCE_DASHBOARD_PROFILES", "{}")
     parsed = json.loads(raw)
     if not isinstance(parsed, dict):
@@ -56,7 +56,7 @@ def get_dashboard_service(
     return DashboardService(
         jira=evidence.jira_client,
         scoring=scoring,
-        profiles=_profiles(),
+        profiles=load_workforce_profiles(),
         jira_site_url=os.getenv("JIRA_SITE_URL", os.getenv("JIRA_CLOUD_ID", "")),
         today=lambda: datetime.now().astimezone().date(),
         environment=cast(Literal["dev", "prod", "test"], raw_environment),

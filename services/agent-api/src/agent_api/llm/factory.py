@@ -30,8 +30,8 @@ EXPLANATION_TOOL_SCHEMA: dict[str, object] = {
             },
         },
         "citations": {"type": "array", "items": {"type": "string"}},
-        "score": {"type": "integer"},
-        "risk_level": {"type": "string"},
+        "score": {"type": ["integer", "null"]},
+        "risk_level": {"type": ["string", "null"]},
         "uncertainties": {"type": "array", "items": {"type": "string"}},
     },
     "required": [
@@ -51,6 +51,8 @@ def get_explanation_provider() -> ExplanationProvider:
     """Use Bedrock when explicitly configured and fail safely to rules otherwise."""
     model_id = os.getenv("BEDROCK_MODEL_ID")
     if not model_id:
+        if os.getenv("BEDROCK_ONLY_CHAT", "false").casefold() == "true":
+            raise RuntimeError("Bedrock chat model is not configured")
         return DeterministicFallbackProvider()
 
     region = os.getenv("AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "us-east-1"))
@@ -105,4 +107,7 @@ def get_explanation_provider() -> ExplanationProvider:
 
         return await asyncio.to_thread(call)
 
-    return BedrockExplanationProvider(invoke=invoke)
+    return BedrockExplanationProvider(
+        invoke=invoke,
+        allow_fallback=(os.getenv("BEDROCK_ONLY_CHAT", "false").casefold() != "true"),
+    )
