@@ -5,6 +5,9 @@ metadata:
   namespace: prod
 data:
   APP_ENVIRONMENT: prod
+  ALLOW_ANONYMOUS_READ: "false"
+  ALLOW_JIRA_MUTATIONS: "false"
+  BEDROCK_ONLY_CHAT: "true"
   JIRA_PROJECT_KEY: WORKFORCE-PROD
   JIRA_MUTATION_ENABLED: "false"
   REPORT_BUCKET: workforce-risk-prod-reports
