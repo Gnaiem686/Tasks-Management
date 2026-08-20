@@ -21,9 +21,18 @@ async function readJson(path,options={}){
   });
   const payload=await response.json();
   if(!response.ok){
-    throw new Error(
-      payload.detail?.message||payload.detail||`Request failed (${response.status}).`
-    );
+    const detail=payload.detail;
+    const message=typeof detail==="string"
+      ?detail
+      :detail?.message||`Request failed (${response.status}).`;
+    const error=new Error(message);
+    error.status=response.status;
+    error.correlationId=
+      detail?.correlation_id||
+      payload.correlation_id||
+      response.headers?.get?.("X-Correlation-ID")||
+      null;
+    throw error;
   }
   return payload;
 }
@@ -305,6 +314,24 @@ function historyKey(){
   return `workforce-chat:${state.project}`;
 }
 
+function assistantAvailabilityMessage(error){
+  const correlation=error instanceof Error&&typeof error.correlationId==="string"
+    ?error.correlationId
+    :null;
+  const status=error instanceof Error&&typeof error.status==="number"
+    ?error.status
+    :null;
+  if(
+    status===503||
+    (error instanceof Error&&error.message.includes("temporarily unavailable"))
+  ){
+    return correlation
+      ?`The AI assistant is temporarily unavailable right now. Please try again in a moment. Correlation: ${correlation}`
+      :"The AI assistant is temporarily unavailable right now. Please try again in a moment.";
+  }
+  return error instanceof Error?error.message:"The AI assistant is temporarily unavailable.";
+}
+
 function appendMessage(role,text,save=true){
   const message=make(
     "div",
@@ -348,16 +375,13 @@ async function sendChat(question){
     if(!payload.explanation||payload.explanation.source!=="bedrock"){
       throw new Error("The AI assistant could not produce a verified answer.");
     }
-    const citations=payload.explanation.citations.length
-      ?`\n\nEvidence: ${payload.explanation.citations.join(", ")}`
-      :"";
-    appendMessage("assistant",`${payload.explanation.answer||payload.explanation.summary}${citations}`);
+    if(!payload.explanation.answer){
+      throw new Error("The AI assistant could not produce a verified answer.");
+    }
+    appendMessage("assistant",payload.explanation.answer);
   }catch(error){
     pending.remove();
-    appendMessage(
-      "error",
-      error instanceof Error?error.message:"The AI assistant is temporarily unavailable."
-    );
+    appendMessage("error",assistantAvailabilityMessage(error));
   }
 }
 
