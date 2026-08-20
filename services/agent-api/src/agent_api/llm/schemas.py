@@ -5,15 +5,19 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 from workforce_risk.models import FactorContribution, RiskResult
 
+from agent_api.dashboard.models import DashboardSnapshot
 from agent_api.historical_evidence import compare_dossiers
 from agent_api.risk_evidence import RiskEvidenceDossier
+from agent_api.task_queries import TaskQueryResult
 
 
 class ExplanationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     workflow: str
     question: str
-    risk: RiskResult
+    risk: RiskResult | None = None
+    project_snapshot: DashboardSnapshot | None = None
+    task_query_result: TaskQueryResult | None = None
     evidence_dossier: RiskEvidenceDossier | None = None
     previous_evidence_dossier: RiskEvidenceDossier | None = None
     candidate_ids: tuple[str, ...] = ()
@@ -48,6 +52,28 @@ class ExplanationResponse(ModelExplanation):
 def build_model_payload(request: ExplanationRequest) -> dict[str, object]:
     """Allowlist only deterministic, work-planning evidence for Bedrock."""
     risk = request.risk
+    if risk is None:
+        if request.task_query_result is not None:
+            result = request.task_query_result
+            return {
+                "workflow": request.workflow,
+                "question": request.question[:500],
+                "task_query": result.model_dump(mode="json"),
+                "evidence_references": list(result.evidence_references),
+                "correlation_id": request.correlation_id,
+            }
+        assert request.project_snapshot is not None
+        snapshot = request.project_snapshot
+        return {
+            "workflow": request.workflow,
+            "question": request.question[:500],
+            "project_snapshot": snapshot.model_dump(mode="json"),
+            "evidence_references": [
+                f"jira:{task.key}:summary" for task in snapshot.tasks
+            ],
+            "missing_evidence": list(snapshot.missing_evidence),
+            "correlation_id": request.correlation_id,
+        }
     ordered_factors = sorted(
         risk.factors,
         key=lambda factor: (-factor.contribution_points, factor.name),

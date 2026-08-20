@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from workforce_contracts.auth import ApplicationRole
 from workforce_risk.models import RiskResult
 
+from agent_api.dashboard.models import DashboardSnapshot
 from agent_api.graph.intents import Intent
 from agent_api.llm.schemas import ExplanationResponse
 from agent_api.risk_evidence import RiskEvidenceDossier
@@ -44,6 +45,7 @@ class GraphState(TypedDict):
     evidence_dossier: NotRequired[RiskEvidenceDossier]
     previous_evidence_dossier: NotRequired[RiskEvidenceDossier]
     task_query_result: NotRequired[TaskQueryResult]
+    project_snapshot: NotRequired[DashboardSnapshot]
     explanation: NotRequired[ExplanationResponse]
     capability_guidance: NotRequired[str]
     missing_sources: NotRequired[tuple[str, ...]]

@@ -51,6 +51,7 @@ class BedrockExplanationProvider:
         *,
         invoke: InvokeModel,
         fallback: DeterministicFallbackProvider | None = None,
+        allow_fallback: bool = True,
         timeout_seconds: float = 8.0,
         max_attempts: int = 2,
         circuit_failure_threshold: int = 3,
@@ -58,6 +59,7 @@ class BedrockExplanationProvider:
     ) -> None:
         self._invoke = invoke
         self._fallback = fallback or DeterministicFallbackProvider()
+        self._allow_fallback = allow_fallback
         self._timeout_seconds = timeout_seconds
         self._max_attempts = max(1, max_attempts)
         self._failure_threshold = max(1, circuit_failure_threshold)
@@ -66,7 +68,11 @@ class BedrockExplanationProvider:
         self._opened_at: float | None = None
 
     async def explain(self, request: ExplanationRequest) -> ExplanationResponse:
-        if request.risk.score is None or request.risk.level is None:
+        if (
+            request.risk is not None
+            and (request.risk.score is None or request.risk.level is None)
+            and self._allow_fallback
+        ):
             return await self._fallback.explain(request)
         if (
             request.workflow == "explain_history"
@@ -74,7 +80,9 @@ class BedrockExplanationProvider:
         ):
             return await self._fallback.explain(request)
         if self._circuit_is_open():
-            return await self._fallback.explain(request)
+            if self._allow_fallback and request.risk is not None:
+                return await self._fallback.explain(request)
+            raise OSError("Bedrock explanation circuit is open")
         payload = build_model_payload(request)
         for attempt in range(self._max_attempts):
             try:
@@ -119,7 +127,9 @@ class BedrockExplanationProvider:
                         ),
                     }
                     await asyncio.sleep(min(0.05 * (2**attempt), 0.2))
-        return await self._fallback.explain(request)
+        if self._allow_fallback and request.risk is not None:
+            return await self._fallback.explain(request)
+        raise OSError("Bedrock explanation invocation failed")
 
     def _circuit_is_open(self) -> bool:
         if self._opened_at is None:
@@ -136,6 +146,8 @@ class BedrockExplanationProvider:
         result: ModelExplanation,
     ) -> ModelExplanation:
         """Remove a subject ID mistakenly placed in an advisory candidate field."""
+        if request.risk is None:
+            return result
         recommendations = tuple(
             recommendation.model_copy(update={"candidate_id": None})
             if recommendation.candidate_id == request.risk.subject_id
@@ -147,10 +159,27 @@ class BedrockExplanationProvider:
 
     @staticmethod
     def _validate_result(request: ExplanationRequest, result: ModelExplanation) -> None:
-        expected_level = request.risk.level.value if request.risk.level else None
-        if result.score != request.risk.score or result.risk_level != expected_level:
+        risk = request.risk
+        expected_level = risk.level.value if risk and risk.level else None
+        expected_score = risk.score if risk else None
+        if result.score != expected_score or result.risk_level != expected_level:
             raise ValueError("model changed deterministic risk result")
-        allowed_citations = set(request.risk.evidence_references)
+        allowed_citations = set(risk.evidence_references if risk else ())
+        if request.project_snapshot is not None:
+            for task in request.project_snapshot.tasks:
+                allowed_citations.update(
+                    f"jira:{task.key}:{field}"
+                    for field in (
+                        "summary",
+                        "status",
+                        "priority",
+                        "duedate",
+                        "timeestimate",
+                        "issuelinks",
+                    )
+                )
+        if request.task_query_result is not None:
+            allowed_citations.update(request.task_query_result.evidence_references)
         if request.evidence_dossier is not None:
             allowed_citations.update(request.evidence_dossier.evidence_references)
         if request.previous_evidence_dossier is not None:
@@ -190,7 +219,7 @@ class BedrockExplanationProvider:
                 raise ValueError("model omitted concrete Jira task evidence")
         factor_terms = {
             term
-            for factor in request.risk.factors
+            for factor in (risk.factors if risk else ())
             for term in (
                 factor.name.casefold(),
                 factor.name.replace("_", " ").casefold(),
@@ -199,7 +228,7 @@ class BedrockExplanationProvider:
         if factor_terms and not any(term in answer_folded for term in factor_terms):
             raise ValueError("model answer did not mention supplied factors")
         lowest_impact = sorted(
-            request.risk.factors,
+            risk.factors if risk else (),
             key=lambda factor: (factor.contribution_points, factor.name),
         )[:4]
         lowest_impact_terms = {

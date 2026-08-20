@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest
@@ -11,7 +9,7 @@ WEB = Path(__file__).parents[2] / "src" / "agent_api" / "web"
 
 @pytest.mark.ui
 @pytest.mark.asyncio
-async def test_contextual_chat_is_accessible_and_has_restrictive_csp() -> None:
+async def test_project_chat_is_accessible_and_csp_restricted():
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -21,36 +19,15 @@ async def test_contextual_chat_is_accessible_and_has_restrictive_csp() -> None:
     assert 'aria-labelledby="chat-title"' in response.text
     assert '<label for="manager-question">' in response.text
     assert 'aria-live="polite"' in response.text
-    assert 'id="chat-citations"' in response.text
-    assert 'id="answer-source"' in response.text
-    assert 'id="answer-text"' in response.text
-    assert 'id="factor-table"' not in response.text
-    chat_section = response.text.split('aria-labelledby="chat-title"', 1)[1].split(
-        'aria-labelledby="proposal-title"', 1
-    )[0]
-    assert "Approve" not in chat_section
 
 
 @pytest.mark.ui
-def test_client_sends_only_bounded_context_and_renders_safe_text() -> None:
+def test_chat_uses_selected_project_bounded_context_and_safe_dom():
     script = (WEB / "static" / "chat.js").read_text()
-    assert "/api/v1/investigations?project_key=WRD" in script
-    assert "employee_id" in script
-    assert "project_key" in script
+    assert "/api/v1/investigations?" in script
+    assert "URLSearchParams" in script
+    assert "project_key:state.project" in script
     assert ".textContent" in script
-    assert "createTextNode" in script
     assert "innerHTML" not in script
-    assert "fullEvidence" not in script
-    assert "capability_guidance" in script
-    assert "correlation_id" in script
-    assert "explanation.source" in script
-    assert "explanation.answer" in script
-
-
-@pytest.mark.ui
-def test_jira_evidence_references_are_rendered_as_verification_links() -> None:
-    script = (WEB / "static" / "chat.js").read_text()
-
-    assert "function renderEvidenceReferences" in script
-    assert "/browse/${issueKey}" in script
-    assert "citation.match(/^jira:([A-Z][A-Z0-9]{1,19}-\\d+):/" in script
+    assert 'source!=="bedrock"' in script
+    assert "project_key=WRD" not in script

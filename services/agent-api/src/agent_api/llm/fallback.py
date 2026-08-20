@@ -11,6 +11,8 @@ from agent_api.llm.schemas import (
 class DeterministicFallbackProvider:
     async def explain(self, request: ExplanationRequest) -> ExplanationResponse:
         risk = request.risk
+        if risk is None:
+            raise ValueError("deterministic fallback requires a risk result")
         if risk.score is None:
             summary = (
                 "There is insufficient structured evidence to calculate this risk."

@@ -6,6 +6,7 @@ from typing import Protocol, cast
 from langgraph.graph import END, START, StateGraph
 from workforce_risk.models import RiskResult
 
+from agent_api.dashboard.models import DashboardSnapshot
 from agent_api.graph.intents import Intent
 from agent_api.graph.state import (
     EntityReferences,
@@ -21,7 +22,7 @@ from agent_api.graph.supervisor import (
 )
 from agent_api.historical_evidence import HistoricalRiskContext
 from agent_api.llm.protocol import ExplanationProvider
-from agent_api.llm.schemas import ExplanationRequest, ExplanationResponse
+from agent_api.llm.schemas import ExplanationRequest
 from agent_api.risk_evidence import RiskEvidenceDossier
 from agent_api.task_queries import TaskQueryResult
 
@@ -60,6 +61,12 @@ class HistoricalEvidenceTool(Protocol):
     ) -> HistoricalRiskContext: ...
 
 
+class ProjectEvidenceTool(Protocol):
+    async def build(
+        self, project_key: str, correlation_id: str
+    ) -> DashboardSnapshot: ...
+
+
 class InvestigationWorkflow:
     def __init__(
         self,
@@ -68,6 +75,7 @@ class InvestigationWorkflow:
         task_query_tool: TaskQueryTool | None = None,
         dossier_tool: RiskDossierTool | None = None,
         historical_tool: HistoricalEvidenceTool | None = None,
+        project_tool: ProjectEvidenceTool | None = None,
         explainer: ExplanationProvider,
         max_steps: int = 6,
         max_tool_calls: int = 2,
@@ -77,6 +85,7 @@ class InvestigationWorkflow:
         self._task_query_tool = task_query_tool
         self._dossier_tool = dossier_tool
         self._historical_tool = historical_tool
+        self._project_tool = project_tool
         self._explainer = explainer
         self._max_steps = max_steps
         self._max_tool_calls = max_tool_calls
@@ -102,6 +111,18 @@ class InvestigationWorkflow:
     async def _gather(self, state: GraphState) -> dict[str, object]:
         if state["tool_calls_used"] >= self._max_tool_calls:
             raise RuntimeError("investigation tool-call limit reached")
+        if state["intent"] is Intent.EXPLAIN_PROJECT_RISK:
+            if self._project_tool is None:
+                raise ValueError("project evidence is unavailable")
+            snapshot = await self._project_tool.build(
+                state["references"].project_key,
+                state["verified_context"].correlation_id,
+            )
+            return {
+                "project_snapshot": snapshot,
+                "steps_used": state["steps_used"] + 1,
+                "tool_calls_used": state["tool_calls_used"] + 1,
+            }
         if state["intent"] is Intent.JIRA_TASK_QUERY:
             if self._task_query_tool is None:
                 raise ValueError("Jira task query tool is unavailable")
@@ -161,29 +182,13 @@ class InvestigationWorkflow:
         return gathered
 
     async def _explain(self, state: GraphState) -> dict[str, object]:
-        if state["intent"] is Intent.JIRA_TASK_QUERY:
-            result = state["task_query_result"]
-            explanation = ExplanationResponse(
-                answer=result.answer,
-                summary=result.answer,
-                root_causes=(),
-                recommendations=(),
-                citations=result.evidence_references,
-                score=None,
-                risk_level=None,
-                uncertainties=(),
-                source="jira_mcp",
-                correlation_id=result.correlation_id,
-            )
-            return {
-                "explanation": explanation,
-                "steps_used": state["steps_used"] + 1,
-            }
         explanation = await self._explainer.explain(
             ExplanationRequest(
                 workflow=state["intent"].value,
                 question=state["question"],
-                risk=state["risk"],
+                risk=state.get("risk"),
+                project_snapshot=state.get("project_snapshot"),
+                task_query_result=state.get("task_query_result"),
                 evidence_dossier=state.get("evidence_dossier"),
                 previous_evidence_dossier=state.get("previous_evidence_dossier"),
                 correlation_id=state["verified_context"].correlation_id,

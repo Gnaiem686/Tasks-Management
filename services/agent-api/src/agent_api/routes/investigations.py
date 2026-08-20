@@ -21,6 +21,7 @@ from agent_api.auth.api_keys import (
 )
 from agent_api.auth.principal import AuthenticatedPrincipal
 from agent_api.auth.roles import ApplicationRole
+from agent_api.dashboard.service import DashboardService
 from agent_api.dependencies import (
     EmployeeEvidenceProvider,
     SingleIssueJiraEvidenceProvider,
@@ -46,6 +47,12 @@ from agent_api.historical_evidence import (
 )
 from agent_api.llm.factory import get_explanation_provider
 from agent_api.llm.protocol import ExplanationProvider
+from agent_api.project_access import (
+    ProjectAccessDenied,
+    anonymous_read_principal,
+    require_configured_project,
+)
+from agent_api.routes.dashboard import load_workforce_profiles
 from agent_api.task_queries import JiraTaskQueryTool, TaskQueryResult
 
 router = APIRouter(prefix="/api/v1")
@@ -125,6 +132,12 @@ async def get_investigator(
     project_key: Annotated[str, Query(min_length=1)],
     authorization: Annotated[str | None, Header()] = None,
 ) -> AuthenticatedPrincipal:
+    try:
+        require_configured_project(project_key)
+    except ProjectAccessDenied as exc:
+        raise HTTPException(status_code=403, detail="project is not available") from exc
+    if os.getenv("ALLOW_ANONYMOUS_READ", "false").casefold() == "true":
+        return anonymous_read_principal(project_key)
     environment = cast(
         Literal["dev", "prod", "test"], os.getenv("APP_ENVIRONMENT", "dev")
     )
@@ -246,6 +259,22 @@ async def investigate(
             if database_url
             else None
         ),
+        project_tool=(
+            DashboardService(
+                jira=evidence.jira_client,
+                scoring=scoring,
+                profiles=load_workforce_profiles(),
+                jira_site_url=os.getenv(
+                    "JIRA_SITE_URL", os.getenv("JIRA_CLOUD_ID", "")
+                ),
+                today=lambda: datetime.now(
+                    ZoneInfo(os.getenv("BUSINESS_TIMEZONE", "Asia/Jerusalem"))
+                ).date(),
+                environment=principal.environment,
+            )
+            if isinstance(evidence, SingleIssueJiraEvidenceProvider)
+            else None
+        ),
         explainer=explainer,
     )
     response.headers["X-Correlation-ID"] = correlation_id
@@ -255,6 +284,13 @@ async def investigate(
             question=payload.question,
             references=payload.context,
         )
+    except OSError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "The AI assistant is temporarily unavailable. No answer was generated."
+            ),
+        ) from exc
     except (TimeoutError, ValueError) as exc:
         raise HTTPException(
             status_code=503,
