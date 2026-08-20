@@ -7,21 +7,14 @@ import pytest
 WEB = Path(__file__).parents[2] / "src" / "agent_api" / "web"
 
 
-@pytest.mark.ui
-def test_public_dashboard_only_posts_chat_reads() -> None:
-    script = (WEB / "static" / "chat.js").read_text()
-    assert 'method:"POST"' in script
-    assert "/api/v1/investigations" in script
-    assert "/api/v1/proposals" not in script
-
-
-@pytest.mark.ui
-def test_chat_replaces_raw_503_status_with_friendly_availability_copy() -> None:
+def _run_chat_failure_runtime(mode: str) -> dict[str, object]:
     chat_js_path = WEB / "static" / "chat.js"
     node_script = f"""
 ;(async () => {{
 const fs = require("fs");
 const vm = require("vm");
+
+const mode = {json.dumps(mode)};
 
 class Element {{
   constructor(tagName, id = null) {{
@@ -211,6 +204,9 @@ global.fetch = async (path) => {{
     }};
   }}
   if (String(path).startsWith("/api/v1/investigations?")) {{
+    if (mode === "fetch-reject") {{
+      throw new TypeError("Failed to fetch");
+    }}
     return {{
       ok: false,
       status: 503,
@@ -219,12 +215,20 @@ global.fetch = async (path) => {{
           return name.toLowerCase() === "x-correlation-id" ? "corr-ui-503" : null;
         }},
       }},
-      json: async () => ({{
-        detail: {{
-          error_code: "INVESTIGATION_UNAVAILABLE",
-          correlation_id: "corr-ui-503",
-        }},
-      }}),
+      json: async () => {{
+        if (mode === "invalid-json") {{
+          throw new SyntaxError("Unexpected token < in JSON at position 0");
+        }}
+        if (mode === "empty-json") {{
+          throw new SyntaxError("Unexpected end of JSON input");
+        }}
+        return {{
+          detail: {{
+            error_code: "INVESTIGATION_UNAVAILABLE",
+            correlation_id: "corr-ui-503",
+          }},
+        }};
+      }},
     }};
   }}
   throw new Error(`Unexpected fetch path: ${{path}}`);
@@ -257,8 +261,51 @@ console.log(JSON.stringify({{
         check=False,
     )
     assert completed.returncode == 0, completed.stderr
-    result = json.loads(completed.stdout)
+    return json.loads(completed.stdout)
+
+
+@pytest.mark.ui
+def test_public_dashboard_only_posts_chat_reads() -> None:
+    script = (WEB / "static" / "chat.js").read_text()
+    assert 'method:"POST"' in script
+    assert "/api/v1/investigations" in script
+    assert "/api/v1/proposals" not in script
+
+
+@pytest.mark.ui
+def test_chat_replaces_raw_503_status_with_friendly_availability_copy() -> None:
+    result = _run_chat_failure_runtime("http-503")
 
     assert result["messages"][-1]["className"] == "error-message"
     assert "Request failed (503)" not in result["messages"][-1]["text"]
+    assert "corr-ui-503" in result["messages"][-1]["text"]
+
+
+@pytest.mark.ui
+def test_chat_hides_raw_fetch_rejection_text() -> None:
+    result = _run_chat_failure_runtime("fetch-reject")
+
+    assert result["messages"][-1]["className"] == "error-message"
+    assert "Failed to fetch" not in result["messages"][-1]["text"]
+    assert result["messages"][-1]["text"] == (
+        "The AI assistant is temporarily unavailable right now. "
+        "Please try again in a moment."
+    )
+
+
+@pytest.mark.ui
+@pytest.mark.parametrize(
+    ("mode", "forbidden"),
+    [
+        ("invalid-json", "Unexpected token < in JSON at position 0"),
+        ("empty-json", "Unexpected end of JSON input"),
+    ],
+)
+def test_chat_hides_raw_json_parse_errors_and_keeps_correlation(
+    mode: str, forbidden: str
+) -> None:
+    result = _run_chat_failure_runtime(mode)
+
+    assert result["messages"][-1]["className"] == "error-message"
+    assert forbidden not in result["messages"][-1]["text"]
     assert "corr-ui-503" in result["messages"][-1]["text"]

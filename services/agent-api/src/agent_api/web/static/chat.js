@@ -19,7 +19,15 @@ async function readJson(path,options={}){
       ...(options.body?{"Content-Type":"application/json"}:{}),
     },
   });
-  const payload=await response.json();
+  let payload;
+  try{
+    payload=await response.json();
+  }catch{
+    const error=new Error(`Request failed (${response.status}).`);
+    error.status=response.status;
+    error.correlationId=response.headers?.get?.("X-Correlation-ID")||null;
+    throw error;
+  }
   if(!response.ok){
     const detail=payload.detail;
     const message=typeof detail==="string"
@@ -318,18 +326,9 @@ function assistantAvailabilityMessage(error){
   const correlation=error instanceof Error&&typeof error.correlationId==="string"
     ?error.correlationId
     :null;
-  const status=error instanceof Error&&typeof error.status==="number"
-    ?error.status
-    :null;
-  if(
-    status===503||
-    (error instanceof Error&&error.message.includes("temporarily unavailable"))
-  ){
-    return correlation
-      ?`The AI assistant is temporarily unavailable right now. Please try again in a moment. Correlation: ${correlation}`
-      :"The AI assistant is temporarily unavailable right now. Please try again in a moment.";
-  }
-  return error instanceof Error?error.message:"The AI assistant is temporarily unavailable.";
+  return correlation
+    ?`The AI assistant is temporarily unavailable right now. Please try again in a moment. Correlation: ${correlation}`
+    :"The AI assistant is temporarily unavailable right now. Please try again in a moment.";
 }
 
 function appendMessage(role,text,save=true){

@@ -32,3 +32,24 @@ Implemented the Bedrock chat presentation cleanup so project answers now render 
 
 - The chat UI still requires `source == "bedrock"` and now also requires a non-empty Bedrock `answer` before rendering assistant prose.
 - Correlation text is only shown for temporary availability failures when the API provides a correlation identifier.
+
+## Review Fixes
+
+### Findings addressed
+
+1. Added strict runtime UI coverage for investigation fetch rejection, invalid JSON error bodies, and empty JSON error bodies so chat never surfaces raw browser or parser text.
+2. Tightened chat failure handling so every `sendChat()` investigation failure now resolves to the same friendly assistant availability copy, while preserving a correlation reference only when the response exposed one safely.
+
+### Review TDD cycle
+
+1. Updated the tests first:
+   - `services/agent-api/tests/ui/test_operation_status.py`
+2. Red run before the production change:
+   - Command: `/home/gnaiem/Tasks-Management/.worktrees/cicd-dev-promotion/.venv/bin/python -m pytest /home/gnaiem/Tasks-Management/.worktrees/cicd-dev-promotion/services/agent-api/tests/ui/test_contextual_chat.py /home/gnaiem/Tasks-Management/.worktrees/cicd-dev-promotion/services/agent-api/tests/ui/test_operation_status.py`
+   - Result: `3 failed, 5 passed`
+   - Failures proved the chat UI still rendered raw `Failed to fetch` and raw JSON parse errors from invalid and empty investigation responses
+3. Implemented the minimal production fix in:
+   - `services/agent-api/src/agent_api/web/static/chat.js`
+4. Verification run after the fix:
+   - Command: `/home/gnaiem/Tasks-Management/.worktrees/cicd-dev-promotion/.venv/bin/python -m pytest /home/gnaiem/Tasks-Management/.worktrees/cicd-dev-promotion/services/agent-api/tests/ui/test_contextual_chat.py /home/gnaiem/Tasks-Management/.worktrees/cicd-dev-promotion/services/agent-api/tests/ui/test_operation_status.py`
+   - Result: `8 passed`
