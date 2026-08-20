@@ -46,6 +46,11 @@ from agent_api.historical_evidence import (
 )
 from agent_api.llm.factory import get_explanation_provider
 from agent_api.llm.protocol import ExplanationProvider
+from agent_api.project_access import (
+    ProjectAccessDenied,
+    anonymous_read_principal,
+    require_configured_project,
+)
 from agent_api.task_queries import JiraTaskQueryTool, TaskQueryResult
 
 router = APIRouter(prefix="/api/v1")
@@ -125,6 +130,12 @@ async def get_investigator(
     project_key: Annotated[str, Query(min_length=1)],
     authorization: Annotated[str | None, Header()] = None,
 ) -> AuthenticatedPrincipal:
+    try:
+        require_configured_project(project_key)
+    except ProjectAccessDenied as exc:
+        raise HTTPException(status_code=403, detail="project is not available") from exc
+    if os.getenv("ALLOW_ANONYMOUS_READ", "false").casefold() == "true":
+        return anonymous_read_principal(project_key)
     environment = cast(
         Literal["dev", "prod", "test"], os.getenv("APP_ENVIRONMENT", "dev")
     )
