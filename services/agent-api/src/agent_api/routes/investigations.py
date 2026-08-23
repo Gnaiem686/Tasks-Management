@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal, cast
@@ -29,6 +30,12 @@ from agent_api.dependencies import (
     get_evidence_provider,
     get_scoring_client,
 )
+from agent_api.failure_diagnostics import (
+    FailureComponent,
+    classify_failure,
+    is_retryable_assistant_failure,
+    log_assistant_event,
+)
 from agent_api.graph.agents.operations_diagnostic import OperationsDiagnosticAgent
 from agent_api.graph.agents.project_delivery import ProjectDeliveryAgent
 from agent_api.graph.agents.reassignment_planning import ReassignmentPlanningAgent
@@ -47,14 +54,23 @@ from agent_api.historical_evidence import (
 )
 from agent_api.llm.factory import get_explanation_provider
 from agent_api.llm.protocol import ExplanationProvider
+from agent_api.progress_history import (
+    DatabaseProgressHistoryReader,
+    DatabaseProgressHistoryRecorder,
+)
 from agent_api.project_access import (
     ProjectAccessDenied,
     anonymous_read_principal,
     require_configured_project,
 )
 from agent_api.routes.dashboard import load_workforce_profiles
-from agent_api.task_queries import JiraTaskQueryTool, TaskQueryResult
+from agent_api.task_queries import (
+    GroundedAnswerContext,
+    JiraTaskQueryTool,
+    TaskQueryResult,
+)
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1")
 
 
@@ -79,6 +95,7 @@ class InvestigationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     question: str = Field(min_length=1, max_length=1_000)
     context: EntityReferences
+    previous_answer_context: GroundedAnswerContext | None = None
 
 
 class EmployeeOverloadTool:
@@ -116,6 +133,8 @@ class EvidenceBackedTaskQueryTool:
         question: str,
         references: EntityReferences,
         correlation_id: str,
+        *,
+        previous_context: GroundedAnswerContext | None = None,
     ) -> TaskQueryResult:
         if not isinstance(self._evidence, SingleIssueJiraEvidenceProvider):
             raise ValueError("Jira task queries require Jira evidence mode")
@@ -124,7 +143,12 @@ class EvidenceBackedTaskQueryTool:
             self._evidence.jira_client,
             today=lambda: datetime.now(timezone).date(),
         )
-        return await tool.query(question, references, correlation_id)
+        return await tool.query(
+            question,
+            references,
+            correlation_id,
+            previous_context=previous_context,
+        )
 
 
 async def get_investigator(
@@ -214,6 +238,12 @@ async def investigate(
     if payload.context.project_key != project_key:
         raise HTTPException(status_code=400, detail="project context mismatch")
     correlation_id = x_correlation_id or f"corr-{uuid4()}"
+    log_assistant_event(
+        logger,
+        "assistant_request_received",
+        correlation_id,
+        project_key=project_key,
+    )
     verified = VerifiedAgentContext(
         subject_reference=principal.actor_id,
         roles=(principal.role,),
@@ -271,31 +301,99 @@ async def investigate(
                     ZoneInfo(os.getenv("BUSINESS_TIMEZONE", "Asia/Jerusalem"))
                 ).date(),
                 environment=principal.environment,
+                history=(
+                    DatabaseProgressHistoryRecorder(
+                        environment=principal.environment,
+                        database_url=database_url,
+                        timezone_name=os.getenv("WORKFORCE_TIMEZONE", "Asia/Jerusalem"),
+                    )
+                    if database_url
+                    else None
+                ),
             )
             if isinstance(evidence, SingleIssueJiraEvidenceProvider)
+            else None
+        ),
+        progress_history_reader=(
+            DatabaseProgressHistoryReader(
+                environment=principal.environment,
+                database_url=database_url,
+            )
+            if database_url
             else None
         ),
         explainer=explainer,
     )
     response.headers["X-Correlation-ID"] = correlation_id
+    log_assistant_event(
+        logger,
+        "assistant_request_received",
+        correlation_id,
+        project_key=project_key,
+        current_question=payload.question,
+        previous_question=(
+            payload.previous_answer_context.previous_question
+            if payload.previous_answer_context is not None
+            else None
+        ),
+        previous_intent=(
+            payload.previous_answer_context.intent
+            if payload.previous_answer_context is not None
+            else None
+        ),
+        resolved_issue_keys=(
+            [item.key for item in payload.previous_answer_context.issues]
+            if payload.previous_answer_context is not None
+            else []
+        ),
+    )
     try:
-        return await workflow.run(
+        result = await workflow.run(
             verified_context=verified,
             question=payload.question,
             references=payload.context,
+            previous_answer_context=payload.previous_answer_context,
         )
-    except OSError as exc:
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "The AI assistant is temporarily unavailable. No answer was generated."
-            ),
-        ) from exc
-    except (TimeoutError, ValueError) as exc:
+        assert result.explanation is not None
+        log_assistant_event(
+            logger,
+            "assistant_final_response",
+            correlation_id,
+            project_key=project_key,
+            status=200,
+            source=result.explanation.source,
+            bedrock_invoked=True,
+            bedrock_success=True,
+        )
+        return result
+    except (OSError, TimeoutError) as exc:
+        component: FailureComponent = (
+            "bedrock" if isinstance(exc, OSError) else "internal"
+        )
+        failure_code = classify_failure(exc, component=component)
+        logger.exception(
+            "Assistant request failed correlation_id=%s failure_code=%s "
+            "exception_type=%s exception_message=%s",
+            correlation_id,
+            failure_code,
+            type(exc).__name__,
+            str(exc),
+        )
+        log_assistant_event(
+            logger,
+            "assistant_final_response",
+            correlation_id,
+            project_key=project_key,
+            status=503,
+            failure_code=failure_code,
+            bedrock_success=False,
+        )
         raise HTTPException(
             status_code=503,
             detail={
-                "error_code": "INVESTIGATION_UNAVAILABLE",
+                "error_code": failure_code,
                 "correlation_id": correlation_id,
+                "message": "The assistant could not produce a grounded answer.",
+                "retryable": is_retryable_assistant_failure(failure_code),
             },
         ) from exc

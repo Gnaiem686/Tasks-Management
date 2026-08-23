@@ -104,8 +104,16 @@ services:
       dockerfile: services/agent-api/Dockerfile
     environment:
       APP_ENVIRONMENT: dev
-      EVIDENCE_MODE: fixture
+      EVIDENCE_MODE: ${EVIDENCE_MODE:-fixture}
       EVIDENCE_FIXTURE_DIR: tests/fixtures/scenarios
+      ALLOW_ANONYMOUS_READ: ${ALLOW_ANONYMOUS_READ:-true}
+      ALLOWED_JIRA_PROJECTS: ${ALLOWED_JIRA_PROJECTS:-WRD:Workforce Risk Demo,WFD:Workforce Real Data}
+      JIRA_CLOUD_ID: ${JIRA_CLOUD_ID:-https://gnaiem686.atlassian.net}
+      JIRA_SITE_URL: ${JIRA_SITE_URL:-https://gnaiem686.atlassian.net}
+      JIRA_MCP_AUTHORIZATION: ${JIRA_MCP_AUTHORIZATION:-}
+      JIRA_EMPLOYEE_ISSUE_MAP: '${JIRA_EMPLOYEE_ISSUE_MAP:-{"EMP-001":"WRD-2","EMP-002":"WRD-6","EMP-003":"WRD-4","EMP-004":"WRD-5","EMP-005":"WRD-7","EMP-006":"WRD-8","EMP-007":"WRD-9"}}'
+      WORKFORCE_CAPACITY_MAP: '${WORKFORCE_CAPACITY_MAP:-{"EMP-001":40,"EMP-002":40,"EMP-003":40,"EMP-004":40,"EMP-005":32,"EMP-006":40,"EMP-007":24}}'
+      WORKFORCE_DASHBOARD_PROFILES: '${WORKFORCE_DASHBOARD_PROFILES:-{}}'
       WORKFORCE_MCP_URL: http://workforce-risk-mcp:8001/mcp
       DATABASE_URL: postgresql+asyncpg://workforce:workforce-local-only@postgres:5432/workforce
       API_KEY_HMAC_PEPPER: local-only-pepper-with-at-least-thirty-two-bytes
@@ -135,5 +143,107 @@ services:
       timeout: 3s
       retries: 20
 
+  prometheus:
+    image: prom/prometheus@sha256:a75c5a35bc21d7afe69551eefa3cb1e1fb1775fe759408007a66b54ec3de1f29
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./infra/observability/local/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/observability/local/prometheus/alerts.yml:/etc/prometheus/rules/alerts.yml:ro
+      - workforce-prometheus-data:/prometheus
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ./infra/observability/local/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - workforce-alertmanager-data:/alertmanager
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana@sha256:121a7a9ece6dc10b969f1f96eed64b4f07dfac0d0b8abc070f7cb83bbde86f63
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: workforce-local-only
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    ports:
+      - "127.0.0.1:3001:3000"
+    volumes:
+      - workforce-grafana-data:/var/lib/grafana
+      - ./infra/observability/local/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/observability/local/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - loki
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.5.3
+    command: -config.file=/etc/loki/loki.yml
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - ./infra/observability/local/loki/loki.yml:/etc/loki/loki.yml:ro
+      - workforce-loki-data:/loki
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:3.5.3
+    command: -config.file=/etc/promtail/promtail.yml
+    user: "0:0"
+    volumes:
+      - ./infra/observability/local/promtail/promtail.yml:/etc/promtail/promtail.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.27.0
+    command:
+      - --config.file=/etc/blackbox/blackbox.yml
+    volumes:
+      - ./infra/observability/local/blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter@sha256:e9cff4fc67b1818f8c97adb115b9f12c9a54b533de86765d4a0effc01b357205
+    command:
+      - --path.rootfs=/host
+    pid: host
+    volumes:
+      - /:/host:ro
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.2
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    restart: unless-stopped
+
 volumes:
   workforce-postgres-data:
+  workforce-prometheus-data:
+  workforce-alertmanager-data:
+  workforce-grafana-data:
+  workforce-loki-data:

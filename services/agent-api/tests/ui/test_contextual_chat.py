@@ -15,6 +15,7 @@ def _run_chat_runtime(
     investigation_status: int = 200,
     investigation_payload: dict[str, object] | None = None,
     investigation_headers: dict[str, str] | None = None,
+    investigation_responses: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
     chat_js_path = WEB / "static" / "chat.js"
     node_script = f"""
@@ -25,6 +26,8 @@ const vm = require("vm");
 const investigationStatus = {json.dumps(investigation_status)};
 const investigationPayload = {json.dumps(investigation_payload)};
 const investigationHeaders = {json.dumps(investigation_headers or {})};
+const investigationResponses = {json.dumps(investigation_responses)};
+let investigationCallCount = 0;
 
 class Element {{
   constructor(tagName, id = null) {{
@@ -135,6 +138,7 @@ const ids = [
   "view-all-tasks",
   "close-detail",
   "clear-chat",
+  "cancel-chat",
 ];
 const elements = Object.fromEntries(ids.map((id) => [id, new Element("div", id)]));
 elements["project-select"].tagName = "SELECT";
@@ -148,6 +152,7 @@ elements["view-all-alerts"].tagName = "BUTTON";
 elements["view-all-tasks"].tagName = "BUTTON";
 elements["close-detail"].tagName = "BUTTON";
 elements["clear-chat"].tagName = "BUTTON";
+elements["cancel-chat"].tagName = "BUTTON";
 
 const document = {{
   querySelector(selector) {{
@@ -166,6 +171,7 @@ const document = {{
 const sessionStorageState = new Map();
 global.document = document;
 global.window = global;
+global.window.addEventListener = () => {{}};
 global.sessionStorage = {{
   getItem(key) {{
     return sessionStorageState.has(key) ? sessionStorageState.get(key) : null;
@@ -179,6 +185,8 @@ global.sessionStorage = {{
 }};
 global.history = {{ replaceState() {{}} }};
 global.location = {{ search: "" }};
+global.setTimeout = (callback) => {{ callback(); return 1; }};
+global.clearTimeout = () => {{}};
 global.fetch = async (path) => {{
   if (path === "/api/v1/projects") {{
     return {{
@@ -220,19 +228,26 @@ global.fetch = async (path) => {{
     }};
   }}
   if (String(path).startsWith("/api/v1/investigations?")) {{
+    const configured = investigationResponses?.[
+      Math.min(investigationCallCount, investigationResponses.length - 1)
+    ];
+    investigationCallCount += 1;
+    const status = configured?.status ?? investigationStatus;
+    const body = configured?.body ?? investigationPayload;
+    const headers = configured?.headers ?? investigationHeaders;
     return {{
-      ok: investigationStatus < 400,
-      status: investigationStatus,
+      ok: status < 400,
+      status,
       headers: {{
         get(name) {{
           return (
-            investigationHeaders[name]
-            ?? investigationHeaders[name.toLowerCase()]
+            headers[name]
+            ?? headers[name.toLowerCase()]
             ?? null
           );
         }},
       }},
-      json: async () => investigationPayload,
+      json: async () => body,
     }};
   }}
   throw new Error(`Unexpected fetch path: ${{path}}`);
@@ -252,6 +267,7 @@ console.log(JSON.stringify({{
     className: node.className,
   }})),
   history: JSON.parse(sessionStorageState.get("workforce-chat:WFD") || "[]"),
+  investigationCallCount,
 }}));
 }})().catch((error) => {{
   console.error(error);
@@ -291,7 +307,8 @@ def test_chat_uses_selected_project_bounded_context_and_safe_dom() -> None:
     assert "project_key:state.project" in script
     assert ".textContent" in script
     assert "innerHTML" not in script
-    assert 'source!=="bedrock"' in script
+    assert 'payload.explanation.source!=="bedrock"' in script
+    assert "previous_answer_context" in script
     assert "project_key=WRD" not in script
 
 
@@ -318,3 +335,46 @@ def test_bedrock_chat_preserves_answer_and_hides_raw_citations() -> None:
     assert messages[-1]["text"] == answer
     assert "jira:WFD-13:summary" not in json.dumps(messages)
     assert "Evidence:" not in json.dumps(messages)
+
+
+@pytest.mark.ui
+def test_transient_bedrock_failures_wait_until_bedrock_succeeds() -> None:
+    result = _run_chat_runtime(
+        investigation_responses=[
+            {
+                "status": 503,
+                "body": {
+                    "error_code": "bedrock_timeout",
+                    "correlation_id": "corr-timeout",
+                    "message": "Bedrock timed out.",
+                    "retryable": True,
+                },
+            },
+            {
+                "status": 503,
+                "body": {
+                    "error_code": "bedrock_throttling",
+                    "correlation_id": "corr-throttled",
+                    "message": "Bedrock throttled the request.",
+                    "retryable": True,
+                },
+            },
+            {
+                "status": 200,
+                "body": {
+                    "explanation": {
+                        "answer": "WFD-11 is blocked by WFD-9.",
+                        "source": "bedrock",
+                    }
+                },
+            },
+        ]
+    )
+    messages = cast(list[dict[str, str]], result["messages"])
+
+    assert result["investigationCallCount"] == 3
+    assert messages[-1] == {
+        "className": "assistant-message",
+        "text": "WFD-11 is blocked by WFD-9.",
+    }
+    assert all("temporarily unavailable" not in item["text"] for item in messages)

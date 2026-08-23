@@ -2,7 +2,7 @@ const EMPLOYEE_PREVIEW_LIMIT=5;
 const ALERT_PREVIEW_LIMIT=4;
 const TASK_PREVIEW_LIMIT=5;
 
-const state={project:null,snapshot:null};
+const state={project:null,snapshot:null,chatAbortController:null};
 const $=(selector)=>document.querySelector(selector);
 const make=(tag,text,className)=>{
   const node=document.createElement(tag);
@@ -17,6 +17,7 @@ async function readJson(path,options={}){
     headers:{
       Accept:"application/json",
       ...(options.body?{"Content-Type":"application/json"}:{}),
+      ...(options.headers||{}),
     },
   });
   let payload;
@@ -32,7 +33,7 @@ async function readJson(path,options={}){
     const detail=payload.detail;
     const message=typeof detail==="string"
       ?detail
-      :detail?.message||`Request failed (${response.status}).`;
+      :detail?.message||payload.message||`Request failed (${response.status}).`;
     const error=new Error(message);
     error.status=response.status;
     error.correlationId=
@@ -40,6 +41,8 @@ async function readJson(path,options={}){
       payload.correlation_id||
       response.headers?.get?.("X-Correlation-ID")||
       null;
+    error.errorCode=detail?.error_code||payload.error_code||null;
+    error.retryable=detail?.retryable===true||payload.retryable===true;
     throw error;
   }
   return payload;
@@ -61,8 +64,11 @@ function riskStateClass(level){
 }
 
 function riskChip(level,score){
-  const label=level==="insufficient-data"?"Insufficient data":`${level} · ${score}/100`;
-  return make("span",label,`risk-chip ${level} ${riskStateClass(level)}`);
+  const visibleLevel=level==="critical"?"high":level;
+  const label=visibleLevel==="insufficient-data"
+    ?"Insufficient data"
+    :`${visibleLevel[0].toUpperCase()+visibleLevel.slice(1)} · ${score}/100`;
+  return make("span",label,`risk-chip ${visibleLevel} ${riskStateClass(level)}`);
 }
 
 function card(label,value,note){
@@ -132,7 +138,7 @@ function renderEmployeeSummary(employee){
     :`${employee.remaining_hours}h / ${employee.capacity_hours??"?"}h`;
   return [
     make("h3",employee.display_name),
-    make("p",employee.role||employee.employee_id,"muted"),
+    make("p",employee.role||"Role not configured","muted"),
     riskChip(employee.level,employee.score??"—"),
     make("p",`Workload: ${workloadText}`),
     make("p",`Tasks: ${employee.active_tasks}`),
@@ -142,7 +148,7 @@ function renderEmployeeSummary(employee){
 
 function renderAlertSummary(alert){
   return [
-    riskChip(alert.severity,"!"),
+    riskChip(alert.severity,alert.score),
     make("p",alert.subject_id,"alert-subject"),
     make("p",alert.reason),
   ];
@@ -161,6 +167,7 @@ function renderTaskSummary(task){
     make("p",`Status: ${task.status}`),
     make("p",`Due: ${task.due_date||"No due date"}`),
     make("p",`Remaining: ${formatHours(task.remaining_hours)}`),
+    ...(task.data_quality_findings||[]).map((finding)=>make("p",`Data quality: ${finding}`,"muted")),
     link
   );
   return group;
@@ -198,7 +205,7 @@ function renderDashboard(snapshot){
     const nameCell=make("td");
     nameCell.append(
       make("strong",employee.display_name),
-      make("div",employee.role||employee.employee_id,"muted")
+      make("div",employee.role||"Role not configured","muted")
     );
     const riskCell=make("td");
     riskCell.append(riskChip(employee.level,employee.score??"—"));
@@ -231,7 +238,7 @@ function renderDashboard(snapshot){
     for(const alert of previewAlerts){
       const item=make("li");
       item.append(
-        riskChip(alert.severity,"!"),
+        riskChip(alert.severity,alert.score),
         make("strong",alert.subject_id,"alert-subject"),
         make("div",alert.reason,"muted")
       );
@@ -243,7 +250,7 @@ function renderDashboard(snapshot){
   progress.replaceChildren();
   progress.append(
     make("p",`${project.completed_tasks} complete · ${project.active_tasks} active`,"overview-metric"),
-    make("p",`${project.due_soon_tasks} due soon · ${project.overdue_tasks} overdue`,"overview-metric"),
+    make("p",`${project.due_soon_tasks} due within 7 days · ${project.overdue_tasks} overdue`,"overview-metric"),
     make("p",`${project.blocked_tasks} blocked · ${project.missing_estimate_tasks} missing estimates`,"overview-metric")
   );
   const meter=make("div",undefined,"meter");
@@ -262,7 +269,10 @@ function renderDashboard(snapshot){
 
   const taskRows=$("#task-rows");
   taskRows.replaceChildren();
-  for(const task of snapshot.tasks.slice(0,TASK_PREVIEW_LIMIT)){
+  const attentionTasks=snapshot.tasks.filter(
+    (task)=>!["done","closed","resolved"].includes(task.status.toLowerCase())
+  );
+  for(const task of attentionTasks.slice(0,TASK_PREVIEW_LIMIT)){
     const row=make("tr");
     const taskCell=make("td");
     const link=make("a",`${task.key} · ${task.summary}`);
@@ -299,7 +309,7 @@ function renderDashboard(snapshot){
   );
   updateViewAll(
     "view-all-tasks",
-    snapshot.tasks,
+    attentionTasks,
     TASK_PREVIEW_LIMIT,
     "All tasks",
     (task)=>renderTaskSummary(task)
@@ -323,6 +333,10 @@ function historyKey(){
   return `workforce-chat:${state.project}`;
 }
 
+function contextKey(){
+  return `workforce-chat-context:${state.project}`;
+}
+
 function assistantAvailabilityMessage(error){
   const correlation=error instanceof Error&&typeof error.correlationId==="string"
     ?error.correlationId
@@ -330,6 +344,29 @@ function assistantAvailabilityMessage(error){
   return correlation
     ?`The AI assistant is temporarily unavailable right now. Please try again in a moment. Correlation: ${correlation}`
     :"The AI assistant is temporarily unavailable right now. Please try again in a moment.";
+}
+
+function cancelPendingChat(){
+  state.chatAbortController?.abort();
+  state.chatAbortController=null;
+  const cancel=$("#cancel-chat");
+  if(cancel)cancel.hidden=true;
+}
+
+function retryDelay(attempt,signal){
+  const base=Math.min(1000*(2**Math.min(attempt,4)),15000);
+  const delay=base+Math.floor(Math.random()*Math.min(base*.2,1000));
+  return new Promise((resolve,reject)=>{
+    if(signal.aborted){
+      reject(new DOMException("Cancelled","AbortError"));
+      return;
+    }
+    const timer=setTimeout(resolve,delay);
+    signal.addEventListener("abort",()=>{
+      clearTimeout(timer);
+      reject(new DOMException("Cancelled","AbortError"));
+    },{once:true});
+  });
 }
 
 function appendMessage(role,text,save=true){
@@ -363,25 +400,58 @@ function restoreChat(){
 }
 
 async function sendChat(question){
+  cancelPendingChat();
+  const controller=new AbortController();
+  state.chatAbortController=controller;
+  const requestId=`chat-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const cancelButton=$("#cancel-chat");
+  if(cancelButton)cancelButton.hidden=false;
   appendMessage("user",question);
   appendMessage("assistant","Investigating current project evidence...",false);
   const pending=$("#chat-messages").lastElementChild;
+  const previousContext=JSON.parse(sessionStorage.getItem(contextKey())||"null");
+  let attempt=0;
   try{
-    const payload=await readJson(`/api/v1/investigations?${params({project_key:state.project})}`,{
-      method:"POST",
-      body:JSON.stringify({question,context:{project_key:state.project}}),
-    });
-    pending.remove();
-    if(!payload.explanation||payload.explanation.source!=="bedrock"){
-      throw new Error("The AI assistant could not produce a verified answer.");
+    while(!controller.signal.aborted){
+      try{
+        const payload=await readJson(`/api/v1/investigations?${params({project_key:state.project})}`,{
+          method:"POST",
+          signal:controller.signal,
+          headers:{"X-Client-Request-ID":requestId},
+          body:JSON.stringify({
+            question,
+            context:{project_key:state.project},
+            previous_answer_context:previousContext,
+          }),
+        });
+        if(!payload.explanation||payload.explanation.source!=="bedrock"||!payload.explanation.answer){
+          throw new Error("The AI assistant could not produce a verified answer.");
+        }
+        pending.remove();
+        if(payload.answer_context){
+          sessionStorage.setItem(contextKey(),JSON.stringify(payload.answer_context));
+        }
+        appendMessage("assistant",payload.explanation.answer);
+        return;
+      }catch(error){
+        if(error?.name==="AbortError")return;
+        if(error?.retryable===true){
+          pending.textContent="Bedrock is still working...";
+          await retryDelay(attempt,controller.signal);
+          attempt+=1;
+          continue;
+        }
+        pending.remove();
+        appendMessage("error",assistantAvailabilityMessage(error));
+        return;
+      }
     }
-    if(!payload.explanation.answer){
-      throw new Error("The AI assistant could not produce a verified answer.");
+  }finally{
+    if(state.chatAbortController===controller){
+      state.chatAbortController=null;
+      const cancelButton=$("#cancel-chat");
+      if(cancelButton)cancelButton.hidden=true;
     }
-    appendMessage("assistant",payload.explanation.answer);
-  }catch(error){
-    pending.remove();
-    appendMessage("error",assistantAvailabilityMessage(error));
   }
 }
 
@@ -403,6 +473,7 @@ async function loadProjects(){
 }
 
 $("#project-select").addEventListener("change",async(event)=>{
+  cancelPendingChat();
   state.project=event.target.value;
   history.replaceState(null,"",`?${params({project:state.project})}`);
   restoreChat();
@@ -411,9 +482,12 @@ $("#project-select").addEventListener("change",async(event)=>{
 $("#refresh-dashboard").addEventListener("click",()=>loadDashboard(state.project));
 $("#close-detail").addEventListener("click",()=>$("#detail-drawer").close());
 $("#clear-chat").addEventListener("click",()=>{
+  cancelPendingChat();
   sessionStorage.removeItem(historyKey());
+  sessionStorage.removeItem(contextKey());
   restoreChat();
 });
+$("#cancel-chat")?.addEventListener("click",cancelPendingChat);
 $("#chat-composer").addEventListener("submit",async(event)=>{
   event.preventDefault();
   const input=$("#manager-question");
@@ -426,6 +500,7 @@ $("#chat-composer").addEventListener("submit",async(event)=>{
 for(const button of document.querySelectorAll("[data-question]")){
   button.addEventListener("click",()=>sendChat(button.dataset.question));
 }
+window.addEventListener?.("beforeunload",cancelPendingChat);
 loadProjects().catch((error)=>{
   $("#page-status").textContent=error.message;
 });

@@ -33,7 +33,7 @@ def test_dashboard_has_project_regions_detail_drawer_and_persistent_chat() -> No
     normalized = "".join(styles.split())
     assert (
         ".dashboard-shell{display:grid;"
-        "grid-template-columns:minmax(0,7fr)minmax(22rem,3fr);" in normalized
+        "grid-template-columns:minmax(0,3fr)minmax(24rem,2fr);" in normalized
     )
     assert (
         "@media(max-width:960px){.dashboard-shell{grid-template-columns:1fr;"

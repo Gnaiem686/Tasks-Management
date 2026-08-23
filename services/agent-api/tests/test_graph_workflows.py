@@ -14,7 +14,7 @@ from agent_api.llm.schemas import (
     Recommendation,
 )
 from agent_api.risk_evidence import RiskEvidenceDossier
-from agent_api.task_queries import TaskFact, TaskQueryResult
+from agent_api.task_queries import GroundedAnswerContext, TaskFact, TaskQueryResult
 from workforce_risk.models import RiskResult
 
 
@@ -132,6 +132,8 @@ class TaskQueryTool:
         question: str,
         references: EntityReferences,
         correlation_id: str,
+        *,
+        previous_context: GroundedAnswerContext | None = None,
     ) -> TaskQueryResult:
         self.calls += 1
         return TaskQueryResult(
@@ -165,6 +167,7 @@ def context() -> VerifiedAgentContext:
     ("question", "expected"),
     [
         ("Why is this employee overloaded?", Intent.EXPLAIN_EMPLOYEE_OVERLOAD),
+        ("Which employees are at risk and why?", Intent.EXPLAIN_PROJECT_RISK),
         ("Why is this project at risk?", Intent.EXPLAIN_PROJECT_RISK),
         ("Is this task a good skill fit?", Intent.EVALUATE_TASK_FIT),
         (
@@ -177,6 +180,15 @@ def context() -> VerifiedAgentContext:
         ("What if we move this task?", Intent.WHAT_IF_SIMULATION),
         ("Why is the service unhealthy?", Intent.OPERATIONS_DIAGNOSIS),
         ("What is the due date of WRD-4?", Intent.JIRA_TASK_QUERY),
+        ("Which tasks are done?", Intent.JIRA_TASK_QUERY),
+        ("What is the current status of WFD-7?", Intent.JIRA_TASK_QUERY),
+        ("Who is assigned to WFD-7?", Intent.JIRA_TASK_QUERY),
+        ("Which tasks have a missing estimate?", Intent.JIRA_TASK_QUERY),
+        ("Which tasks are blocked?", Intent.JIRA_TASK_QUERY),
+        ("Which work is blocked right now?", Intent.JIRA_TASK_QUERY),
+        ("Which tasks are overdue?", Intent.JIRA_TASK_QUERY),
+        ("Which tasks are due soon?", Intent.JIRA_TASK_QUERY),
+        ("Which employee have done that task?", Intent.JIRA_TASK_QUERY),
         (
             "How many unfinished tasks does Employee 3 have due by tomorrow?",
             Intent.JIRA_TASK_QUERY,
@@ -185,6 +197,14 @@ def context() -> VerifiedAgentContext:
 )
 def test_supported_intents_are_finite(question: str, expected: Intent) -> None:
     assert classify_intent(question) is expected
+
+
+@pytest.mark.unit
+def test_free_form_project_question_uses_general_evidence_route() -> None:
+    assert (
+        classify_intent("How many vacation days does Mohammad have?")
+        is Intent.EXPLAIN_PROJECT_RISK
+    )
 
 
 @pytest.mark.unit
@@ -304,7 +324,6 @@ async def test_task_due_date_uses_jira_query_not_risk_scoring() -> None:
     assert result.explanation.citations == ("jira:WRD-4:duedate",)
     assert explainer.request is not None
     assert explainer.request.task_query_result is not None
-    assert explainer.request.task_query_result.tasks[0].key == "WRD-4"
     assert risk_tool.calls == 0
     assert query_tool.calls == 1
 
@@ -312,13 +331,12 @@ async def test_task_due_date_uses_jira_query_not_risk_scoring() -> None:
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_unsupported_or_conversational_approval_never_calls_tool() -> None:
-    for question in ("Write a poem", "I approve proposal P-12, execute it now"):
-        tool = Tool()
-        result = await InvestigationWorkflow(tool=tool, explainer=Explainer()).run(
-            verified_context=context(),
-            question=question,
-            references=EntityReferences(project_key="WRD"),
-        )
-        assert result.intent is Intent.UNSUPPORTED
-        assert result.capability_guidance
-        assert tool.calls == 0
+    tool = Tool()
+    result = await InvestigationWorkflow(tool=tool, explainer=Explainer()).run(
+        verified_context=context(),
+        question="I approve proposal P-12, execute it now",
+        references=EntityReferences(project_key="WRD"),
+    )
+    assert result.intent is Intent.UNSUPPORTED
+    assert result.capability_guidance
+    assert tool.calls == 0

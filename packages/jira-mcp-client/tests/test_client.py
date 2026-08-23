@@ -42,6 +42,7 @@ async def test_search_requests_structured_work_situation_fields() -> None:
     fields = transport.arguments["fields"]
     assert isinstance(fields, list)
     assert "timeestimate" in fields
+    assert "timespent" in fields
     assert "customfield_10042" in fields
 
 

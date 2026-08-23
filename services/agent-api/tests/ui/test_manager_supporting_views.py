@@ -39,6 +39,7 @@ def _snapshot(
         {
             "subject_id": f"WFD-{index}",
             "severity": "critical" if index == 1 else "high" if index % 2 else "medium",
+            "score": 80 - index,
             "reason": f"Alert reason {index}",
         }
         for index in range(1, alert_count + 1)
@@ -274,11 +275,14 @@ const result = {{
   summary_cards: elements["summary-cards"].children.length,
   employee_rows: elements["employee-rows"].children.length,
   alert_items: elements["alert-list"].children.length,
+  alert_first: elements["alert-list"].children[0]?.textContent || "",
   task_rows: elements["task-rows"].children.length,
   employee_view_all_disabled: elements["view-all-employees"].disabled,
   alert_view_all_disabled: elements["view-all-alerts"].disabled,
   task_view_all_disabled: elements["view-all-tasks"].disabled,
   page_status: elements["page-status"].textContent,
+  employee_first: elements["employee-rows"].children[0]?.textContent || "",
+  progress_text: elements["progress-content"].textContent,
 }};
 
 elements["view-all-employees"].onclick();
@@ -326,6 +330,8 @@ def test_dashboard_runtime_renders_bounded_previews_and_populates_drawers() -> N
     assert result["summary_cards"] == 4
     assert result["employee_rows"] == 5
     assert result["alert_items"] == 4
+    assert "79/100" in cast(str, result["alert_first"])
+    assert "!/100" not in cast(str, result["alert_first"])
     assert result["task_rows"] == 5
     assert result["employee_view_all_disabled"] is False
     assert result["alert_view_all_disabled"] is False
@@ -336,6 +342,8 @@ def test_dashboard_runtime_renders_bounded_previews_and_populates_drawers() -> N
     assert result["alert_drawer_title"] == "All alerts"
     assert result["alert_drawer_sections"] == 5
     assert "WFD-1" in alert_drawer_first
+    assert "79/100" in alert_drawer_first
+    assert "!/100" not in alert_drawer_first
     assert result["task_drawer_title"] == "All tasks"
     assert result["task_drawer_sections"] == 6
     assert "WFD-1 · Task 1" in task_drawer_first
@@ -367,3 +375,19 @@ def test_tables_and_status_are_accessible() -> None:
     assert ".risk-state-unknown{" in styles
     assert ".risk-state-warning{" in styles
     assert ".risk-state-critical{" in styles
+
+
+@pytest.mark.ui
+def test_manager_view_hides_account_ids_and_excludes_done_attention_tasks() -> None:
+    snapshot = _snapshot(employee_count=1, alert_count=0, task_count=2)
+    snapshot["employees"][0]["role"] = None  # type: ignore[index]
+    snapshot["employees"][0]["employee_id"] = "jira:private-account"  # type: ignore[index]
+    snapshot["employees"][0]["level"] = "critical"  # type: ignore[index]
+    snapshot["tasks"][0]["status"] = "Done"  # type: ignore[index]
+
+    result = _run_dashboard_runtime(snapshot)
+
+    assert result["task_rows"] == 1
+    assert "jira:private-account" not in cast(str, result["employee_first"])
+    assert "High" in cast(str, result["employee_first"])
+    assert "due within 7 days" in cast(str, result["progress_text"])

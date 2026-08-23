@@ -18,6 +18,7 @@ from agent_api.dependencies import (
     get_evidence_provider,
     get_scoring_client,
 )
+from agent_api.progress_history import DatabaseProgressHistoryRecorder
 from agent_api.project_access import (
     ConfiguredProject,
     ProjectAccessDenied,
@@ -60,6 +61,15 @@ def get_dashboard_service(
         jira_site_url=os.getenv("JIRA_SITE_URL", os.getenv("JIRA_CLOUD_ID", "")),
         today=lambda: datetime.now().astimezone().date(),
         environment=cast(Literal["dev", "prod", "test"], raw_environment),
+        history=(
+            DatabaseProgressHistoryRecorder(
+                environment=raw_environment,
+                database_url=os.getenv("DATABASE_URL"),
+                timezone_name=os.getenv("WORKFORCE_TIMEZONE", "Asia/Jerusalem"),
+            )
+            if os.getenv("DATABASE_URL")
+            else None
+        ),
     )
 
 

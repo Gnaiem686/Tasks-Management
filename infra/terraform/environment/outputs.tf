@@ -27,3 +27,8 @@ output "rds_endpoint" {
   value     = aws_db_instance.application.endpoint
   sensitive = true
 }
+
+output "ebs_csi_controller_role_arn" {
+  value     = aws_iam_role.ebs_csi_controller.arn
+  sensitive = true
+}

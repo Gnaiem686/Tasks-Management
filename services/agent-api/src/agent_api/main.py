@@ -55,13 +55,29 @@ async def http_error(request: Request, exc: HTTPException) -> JSONResponse:
         429: "RATE_LIMITED",
         503: "SERVICE_UNAVAILABLE",
     }
+    content: dict[str, object] = {
+        "error_code": codes.get(exc.status_code, "REQUEST_REJECTED"),
+        "message": str(exc.detail),
+        "correlation_id": correlation_id,
+    }
+    detail: object = exc.detail
+    if isinstance(detail, dict):
+        error_code = detail.get("error_code")
+        message = detail.get("message")
+        detail_correlation = detail.get("correlation_id")
+        retryable = detail.get("retryable")
+        if isinstance(error_code, str):
+            content["error_code"] = error_code
+        if isinstance(message, str):
+            content["message"] = message
+        if isinstance(detail_correlation, str):
+            correlation_id = detail_correlation
+            content["correlation_id"] = detail_correlation
+        if isinstance(retryable, bool):
+            content["retryable"] = retryable
     return JSONResponse(
         status_code=exc.status_code,
-        content={
-            "error_code": codes.get(exc.status_code, "REQUEST_REJECTED"),
-            "message": str(exc.detail),
-            "correlation_id": correlation_id,
-        },
+        content=content,
         headers={"X-Correlation-ID": correlation_id},
     )
 

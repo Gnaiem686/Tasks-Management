@@ -114,3 +114,33 @@ def test_worker_nodes_can_pull_images_from_project_ecr_repositories() -> None:
     assert '"ecr:GetDownloadUrlForLayer"' in iam
     assert "repository/workforce-risk/" in iam
     assert 'resource "aws_iam_role_policy" "worker_ecr_pull"' in iam
+
+
+def test_ebs_csi_role_is_bound_to_only_the_controller_service_account() -> None:
+    ebs_csi = (TF_ROOT / "ebs_csi.tf").read_text()
+
+    assert 'actions = ["sts:AssumeRoleWithWebIdentity"]' in ebs_csi
+    assert "aws_iam_openid_connect_provider.kubernetes.arn" in ebs_csi
+    assert 'test     = "StringEquals"' in ebs_csi
+    assert "${local.cluster_oidc_hostpath}:aud" in ebs_csi
+    assert "${local.cluster_oidc_hostpath}:sub" in ebs_csi
+    assert 'values   = ["sts.amazonaws.com"]' in ebs_csi
+    assert (
+        'values   = ["system:serviceaccount:kube-system:ebs-csi-controller-sa"]'
+        in ebs_csi
+    )
+    assert "system:serviceaccount:*" not in ebs_csi
+
+
+def test_ebs_csi_role_uses_managed_driver_policy_and_sensitive_output() -> None:
+    ebs_csi = (TF_ROOT / "ebs_csi.tf").read_text()
+    outputs = (TF_ROOT / "outputs.tf").read_text()
+
+    assert (
+        'policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"'
+        in ebs_csi
+    )
+    assert 'resource "aws_iam_role_policy_attachment" "ebs_csi_controller"' in ebs_csi
+    assert 'output "ebs_csi_controller_role_arn"' in outputs
+    assert "aws_iam_role.ebs_csi_controller.arn" in outputs
+    assert "sensitive = true" in outputs

@@ -13,7 +13,7 @@ def test_every_specification_requirement_has_a_mapping_row() -> None:
     specification_ids = set(REQUIREMENT_ROW.findall(SPEC.read_text(encoding="utf-8")))
     mapping_ids = set(MAPPING_ROW.findall(TEST_MAPPING.read_text(encoding="utf-8")))
 
-    assert len(specification_ids) == 48
+    assert len(specification_ids) == 49
     assert mapping_ids == specification_ids
 
 

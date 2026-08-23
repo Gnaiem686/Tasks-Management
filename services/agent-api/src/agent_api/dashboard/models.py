@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 
 class ProjectSummary(BaseModel):
@@ -45,6 +45,10 @@ class TaskSummary(BaseModel):
     due_date: date | None
     original_hours: float | None
     remaining_hours: float | None
+    raw_remaining_hours: float | None = None
+    time_spent_hours: float | None = None
+    jira_updated_at: datetime | None = None
+    data_quality_findings: tuple[str, ...] = ()
     required_skills: tuple[str, ...]
     blocker: str | None
     dependencies: tuple[str, ...]
@@ -55,6 +59,7 @@ class AlertSummary(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     subject_id: str
     severity: Literal["medium", "high", "critical"]
+    score: int = Field(ge=0, le=100)
     reason: str
 
 

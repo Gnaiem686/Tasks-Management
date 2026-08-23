@@ -26,6 +26,10 @@ EXPECTED_TABLES = {
     "outbox_events",
     "notification_deliveries",
     "audit_events",
+    "work_weeks",
+    "task_current_states",
+    "task_progress_snapshots",
+    "task_progress_events",
 }
 
 
@@ -62,6 +66,33 @@ def test_comment_evidence_schema_never_stores_raw_comment_body() -> None:
     assert "body" not in columns
     assert "raw_body" not in columns
     assert "comment_text" not in columns
+
+
+@pytest.mark.unit
+def test_task_progress_history_has_current_snapshot_and_event_boundaries() -> None:
+    current = Base.metadata.tables["task_current_states"]
+    snapshots = Base.metadata.tables["task_progress_snapshots"]
+    events = Base.metadata.tables["task_progress_events"]
+
+    assert {
+        "project_key",
+        "issue_key",
+        "work_week_id",
+        "evidence_fingerprint",
+        "last_observed_at",
+        "jira_updated_at",
+        "state",
+    } <= set(current.c.keys())
+    assert {
+        "remaining_estimate_hours",
+        "time_spent_hours",
+        "blocked",
+        "blocker_issue_keys",
+        "captured_at",
+    } <= set(snapshots.c.keys())
+    assert {"event_type", "old_value", "new_value", "occurred_at"} <= set(
+        events.c.keys()
+    )
 
 
 @pytest.mark.unit

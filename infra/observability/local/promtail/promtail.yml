@@ -1,0 +1,67 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+    backoff_config:
+      min_period: 500ms
+      max_period: 5s
+      max_retries: 10
+
+scrape_configs:
+  - job_name: workforce-docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+        filters:
+          - name: label
+            values: [com.docker.compose.project=cicd-dev-promotion]
+    relabel_configs:
+      - source_labels: [__meta_docker_container_label_com_docker_compose_project]
+        regex: cicd-dev-promotion
+        action: keep
+      - source_labels: [__meta_docker_container_label_com_docker_compose_project]
+        target_label: compose_project
+      - source_labels: [__meta_docker_container_label_com_docker_compose_service]
+        target_label: service
+      - source_labels: [__meta_docker_container_id]
+        target_label: __path__
+        replacement: /var/lib/docker/containers/$1/$1-json.log
+    pipeline_stages:
+      - docker: {}
+      - static_labels:
+          environment: dev
+      - metrics:
+          workforce_service_log_lines_total:
+            type: Counter
+            description: Total Workforce Risk Manager service log lines.
+            source: output
+            config:
+              match_all: true
+              action: inc
+      - match:
+          selector: '{service="agent-api"} |~ "(?i)(bedrock).*(failed|failure|timeout|throttl|unavailable|rejected|exhausted)"'
+          stages:
+            - metrics:
+                workforce_bedrock_log_failures_total:
+                  type: Counter
+                  description: Bedrock failure signals observed in Agent API logs.
+                  source: output
+                  config:
+                    match_all: true
+                    action: inc
+      - match:
+          selector: '{service=~"agent-api|workforce-risk-mcp|devops-mcp"} |~ "(?i)(mcp|tool).*(timeout|timed out)"'
+          stages:
+            - metrics:
+                workforce_tool_timeouts_total:
+                  type: Counter
+                  description: MCP or tool timeout signals observed in service logs.
+                  source: output
+                  config:
+                    match_all: true
+                    action: inc

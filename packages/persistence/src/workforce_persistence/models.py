@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import (
     JSON,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -146,6 +147,104 @@ class CommentEvidence(RecordMixin, Base):
             "jira_comment_id",
             "observation_fingerprint",
             name="uq_comment_evidence_observation",
+        ),
+    )
+
+
+class WorkWeek(RecordMixin, Base):
+    __tablename__ = "work_weeks"
+    project_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    week_start: Mapped[date] = mapped_column(Date, nullable=False)
+    week_end: Mapped[date] = mapped_column(Date, nullable=False)
+    __table_args__ = (
+        UniqueConstraint(
+            "environment",
+            "project_key",
+            "week_start",
+            name="uq_work_week_env_project_start",
+        ),
+    )
+
+
+class TaskCurrentState(RecordMixin, Base):
+    __tablename__ = "task_current_states"
+    project_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    issue_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    work_week_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("work_weeks.id"))
+    evidence_fingerprint: Mapped[str] = mapped_column(String(128), nullable=False)
+    last_observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    jira_updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    last_structured_progress_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    state: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    __table_args__ = (
+        UniqueConstraint(
+            "environment",
+            "project_key",
+            "issue_key",
+            name="uq_task_current_env_project_issue",
+        ),
+    )
+
+
+class TaskProgressSnapshot(RecordMixin, Base):
+    __tablename__ = "task_progress_snapshots"
+    work_week_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("work_weeks.id"))
+    project_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    issue_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    assignee_id: Mapped[str | None] = mapped_column(String(256))
+    captured_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    jira_updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(128), nullable=False)
+    original_estimate_hours: Mapped[float | None] = mapped_column(Float)
+    remaining_estimate_hours: Mapped[float | None] = mapped_column(Float)
+    time_spent_hours: Mapped[float | None] = mapped_column(Float)
+    due_date: Mapped[date | None] = mapped_column(Date)
+    priority: Mapped[str | None] = mapped_column(String(64))
+    blocked: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    blocker_issue_keys: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    source: Mapped[str] = mapped_column(String(32), nullable=False, default="jira")
+    evidence_fingerprint: Mapped[str] = mapped_column(String(128), nullable=False)
+    __table_args__ = (
+        UniqueConstraint(
+            "environment",
+            "project_key",
+            "issue_key",
+            "work_week_id",
+            "evidence_fingerprint",
+            name="uq_task_snapshot_env_issue_week_fingerprint",
+        ),
+    )
+
+
+class TaskProgressEvent(RecordMixin, Base):
+    __tablename__ = "task_progress_events"
+    work_week_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("work_weeks.id"))
+    project_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    issue_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    employee_id: Mapped[str | None] = mapped_column(String(128))
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    old_value: Mapped[Any | None] = mapped_column(JSON)
+    new_value: Mapped[Any | None] = mapped_column(JSON)
+    source: Mapped[str] = mapped_column(String(32), nullable=False, default="jira")
+    event_fingerprint: Mapped[str] = mapped_column(String(128), nullable=False)
+    __table_args__ = (
+        UniqueConstraint(
+            "environment",
+            "event_fingerprint",
+            name="uq_task_progress_event_env_fingerprint",
         ),
     )
 

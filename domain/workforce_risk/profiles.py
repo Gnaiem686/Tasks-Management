@@ -50,7 +50,7 @@ class CapacityOverride(BaseModel):
 
 class WorkforceProfile(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    employee_id: str = Field(pattern=r"^EMP-00[1-7]$")
+    employee_id: str = Field(pattern=r"^[A-Z][A-Z0-9_-]{2,63}$")
     environment: Literal["dev", "prod", "test"]
     role: str = Field(min_length=1, max_length=128)
     seniority: Seniority
@@ -91,10 +91,9 @@ def validate_profile_set(
     environment: Literal["dev", "prod", "test"],
     jira_mapping_employee_ids: set[str],
 ) -> None:
-    expected_ids = {f"EMP-{number:03d}" for number in range(1, 8)}
     employee_ids = [profile.employee_id for profile in profiles]
-    if len(profiles) != 7 or set(employee_ids) != expected_ids:
-        raise ValueError("profile employee IDs must be exactly seven and unique")
+    if not profiles or len(employee_ids) != len(set(employee_ids)):
+        raise ValueError("profile employee IDs must be non-empty and unique")
     if any(profile.environment != environment for profile in profiles):
         raise ValueError("profile environment mismatch")
     mapped = [profile for profile in profiles if profile.jira_account_id is not None]
