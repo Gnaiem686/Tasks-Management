@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import inspect
 from collections.abc import Generator
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import pytest
 from agent_api.dashboard.models import (
@@ -10,6 +12,7 @@ from agent_api.dashboard.models import (
     WorkloadDistribution,
 )
 from agent_api.main import app
+from agent_api.routes import dashboard as dashboard_routes
 from agent_api.routes.dashboard import get_dashboard_service
 from httpx import ASGITransport, AsyncClient
 
@@ -79,3 +82,62 @@ async def test_dashboard_rejects_project_outside_allowlist() -> None:
         response = await client.get("/api/v1/dashboard?project_key=OTHER")
 
     assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_dashboard_profiles_load_from_postgres_when_env_fallback_is_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    profile = SimpleNamespace(
+        employee_id="WFD-EMP-001",
+        role="Backend Engineer",
+        weekly_capacity_hours=24.0,
+        jira_account_id="account-1",
+        skills=(("Java", 4), ("Spring Boot", 4)),
+        allocations=(("WFD", 1.0),),
+        capacity_overrides=(),
+    )
+
+    class SessionContext:
+        async def __aenter__(self) -> object:
+            return object()
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+    class Database:
+        closed = False
+
+        def __init__(self, url: str) -> None:
+            assert url == "postgresql+asyncpg://configured"
+
+        def sessions(self) -> SessionContext:
+            return SessionContext()
+
+        async def close(self) -> None:
+            Database.closed = True
+
+    class Repository:
+        def __init__(self, _session: object) -> None:
+            pass
+
+        async def list_for_environment(self, *, environment: str) -> tuple[object, ...]:
+            assert environment == "dev"
+            return (profile,)
+
+    monkeypatch.delenv("WORKFORCE_DASHBOARD_PROFILES", raising=False)
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://configured")
+    monkeypatch.setenv("APP_ENVIRONMENT", "dev")
+    monkeypatch.setenv("JIRA_PROJECT_KEY", "WRD")
+    monkeypatch.setattr(dashboard_routes, "Database", Database, raising=False)
+    monkeypatch.setattr(
+        dashboard_routes, "ProfileRepository", Repository, raising=False
+    )
+
+    result = dashboard_routes.load_workforce_profiles(project_key="WFD")
+    profiles = await result if inspect.isawaitable(result) else result
+
+    assert profiles["account-1"].employee_id == "WFD-EMP-001"
+    assert profiles["account-1"].capacity_hours == 24
+    assert profiles["account-1"].skills == ("Java", "Spring Boot")
+    assert Database.closed is True

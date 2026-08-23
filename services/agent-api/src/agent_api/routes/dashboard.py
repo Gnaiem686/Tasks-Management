@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Literal, cast
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict
+from workforce_persistence.database import Database
+from workforce_persistence.repositories import ProfileRepository, StoredProfile
 
 from agent_api.dashboard.models import DashboardSnapshot
 from agent_api.dashboard.service import DashboardService, WorkforceProfile
@@ -34,8 +36,7 @@ class ProjectListResponse(BaseModel):
     items: tuple[ConfiguredProject, ...]
 
 
-def load_workforce_profiles() -> dict[str, WorkforceProfile]:
-    raw = os.getenv("WORKFORCE_DASHBOARD_PROFILES", "{}")
+def _configured_workforce_profiles(raw: str) -> dict[str, WorkforceProfile]:
     parsed = json.loads(raw)
     if not isinstance(parsed, dict):
         raise RuntimeError("WORKFORCE_DASHBOARD_PROFILES must be an object")
@@ -45,9 +46,60 @@ def load_workforce_profiles() -> dict[str, WorkforceProfile]:
     }
 
 
-def get_dashboard_service(
+def _database_workforce_profiles(
+    profiles: tuple[StoredProfile, ...], *, project_key: str
+) -> dict[str, WorkforceProfile]:
+    now = datetime.now(UTC)
+    result: dict[str, WorkforceProfile] = {}
+    for profile in profiles:
+        allocation = dict(profile.allocations).get(project_key)
+        if profile.jira_account_id is None or allocation is None:
+            continue
+        weekly_capacity = next(
+            (
+                capacity
+                for starts_at, ends_at, capacity, _reason in profile.capacity_overrides
+                if starts_at <= now < ends_at
+            ),
+            profile.weekly_capacity_hours,
+        )
+        result[profile.jira_account_id] = WorkforceProfile(
+            employee_id=profile.employee_id,
+            display_name=profile.employee_id,
+            role=profile.role,
+            capacity_hours=weekly_capacity * allocation,
+            skills=tuple(skill for skill, _proficiency in profile.skills),
+        )
+    return result
+
+
+async def load_workforce_profiles(
+    *, project_key: str | None = None
+) -> dict[str, WorkforceProfile]:
+    raw = os.getenv("WORKFORCE_DASHBOARD_PROFILES", "").strip()
+    if raw and raw != "{}":
+        return _configured_workforce_profiles(raw)
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        return {}
+    database = Database(database_url)
+    try:
+        async with database.sessions() as session:
+            stored = await ProfileRepository(session).list_for_environment(
+                environment=os.getenv("APP_ENVIRONMENT", "dev")
+            )
+        return _database_workforce_profiles(
+            stored,
+            project_key=project_key or os.getenv("JIRA_PROJECT_KEY") or "WFD",
+        )
+    finally:
+        await database.close()
+
+
+async def get_dashboard_service(
     evidence: Annotated[EmployeeEvidenceProvider, Depends(get_evidence_provider)],
     scoring: Annotated[WorkforceScoringClient, Depends(get_scoring_client)],
+    project_key: Annotated[str, Query(pattern=r"^[A-Z][A-Z0-9]{1,19}$")],
 ) -> DashboardService:
     if not isinstance(evidence, SingleIssueJiraEvidenceProvider):
         raise HTTPException(status_code=503, detail="Jira dashboard is unavailable")
@@ -57,7 +109,7 @@ def get_dashboard_service(
     return DashboardService(
         jira=evidence.jira_client,
         scoring=scoring,
-        profiles=load_workforce_profiles(),
+        profiles=await load_workforce_profiles(project_key=project_key),
         jira_site_url=os.getenv("JIRA_SITE_URL", os.getenv("JIRA_CLOUD_ID", "")),
         today=lambda: datetime.now().astimezone().date(),
         environment=cast(Literal["dev", "prod", "test"], raw_environment),

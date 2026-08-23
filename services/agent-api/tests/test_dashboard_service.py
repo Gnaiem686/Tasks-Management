@@ -141,6 +141,28 @@ async def test_dashboard_groups_tasks_by_real_jira_assignee() -> None:
 
 
 @pytest.mark.asyncio
+async def test_dashboard_uses_current_jira_display_name_for_mapped_profile() -> None:
+    service = DashboardService(
+        jira=JiraReader((issue("WFD-1", name="Current Jira Name"),)),
+        scoring=Scorer(),
+        profiles={
+            "account-1": WorkforceProfile(
+                employee_id="WFD-EMP-001",
+                display_name="Stale configured name",
+                role="Backend Engineer",
+                capacity_hours=24,
+            )
+        },
+        jira_site_url="https://example.atlassian.net",
+        today=lambda: date(2026, 8, 20),
+    )
+
+    snapshot = await service.build("WFD", "corr-dashboard")
+
+    assert snapshot.employees[0].display_name == "Current Jira Name"
+
+
+@pytest.mark.asyncio
 async def test_dashboard_marks_missing_estimate_without_guessing() -> None:
     service = DashboardService(
         jira=JiraReader((issue("WFD-14", remaining=None),)),

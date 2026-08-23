@@ -137,6 +137,18 @@ class ProfileRepository:
         )
         return None if profile is None else await self._load(profile)
 
+    async def list_for_environment(
+        self, *, environment: str
+    ) -> tuple[StoredProfile, ...]:
+        profiles = (
+            await self._session.scalars(
+                select(EmployeeProfile)
+                .where(EmployeeProfile.environment == environment)
+                .order_by(EmployeeProfile.employee_id)
+            )
+        ).all()
+        return tuple([await self._load(profile) for profile in profiles])
+
     async def _load(self, profile: EmployeeProfile) -> StoredProfile:
         skills = (
             await self._session.execute(
