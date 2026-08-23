@@ -293,7 +293,7 @@ async def investigate(
             DashboardService(
                 jira=evidence.jira_client,
                 scoring=scoring,
-                profiles=load_workforce_profiles(),
+                profiles=await load_workforce_profiles(project_key=project_key),
                 jira_site_url=os.getenv(
                     "JIRA_SITE_URL", os.getenv("JIRA_CLOUD_ID", "")
                 ),

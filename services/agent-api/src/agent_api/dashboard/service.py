@@ -244,7 +244,7 @@ class DashboardService:
         top_risk = self._top_risk(rows, remaining, profile)
         return EmployeeSummary(
             employee_id=profile.employee_id if profile else f"jira:{account_id}",
-            display_name=profile.display_name if profile else display_name,
+            display_name=display_name,
             role=profile.role if profile else None,
             skills=profile.skills if profile else (),
             capacity_hours=profile.capacity_hours if profile else None,
