@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
@@ -38,10 +39,11 @@ def _structured_labels(fields: Mapping[str, Any]) -> dict[str, Any]:
         raise JiraNormalizationError("labels must be a list of strings")
     labels: list[str] = raw_labels
     employee_id = _single_label_value(labels, "workforce-employee:")
-    if employee_id is not None and employee_id not in {
-        f"EMP-{number:03d}" for number in range(1, 8)
-    }:
-        raise JiraNormalizationError("workforce employee label is not allowlisted")
+    if (
+        employee_id is not None
+        and re.fullmatch(r"[A-Z][A-Z0-9_-]{2,63}", employee_id) is None
+    ):
+        raise JiraNormalizationError("workforce employee label is invalid")
 
     def hours(prefix: str) -> int | None:
         value = _single_label_value(labels, prefix)
@@ -249,6 +251,7 @@ def normalize_issue(
             if fields.get("timeestimate") is not None
             else structured_labels["remaining_estimate_seconds"]
         ),
+        time_spent_seconds=fields.get("timespent"),
         workforce_employee_id=structured_labels["employee_id"],
         difficulty=structured_labels["difficulty"],
         required_skills=structured_labels["skills"],

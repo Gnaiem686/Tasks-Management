@@ -1,0 +1,25 @@
+controller:
+  serviceAccount:
+    create: true
+    name: ebs-csi-controller-sa
+  env:
+    - name: AWS_ROLE_ARN
+      value: WORKFORCE_EBS_CSI_ROLE_ARN
+    - name: AWS_WEB_IDENTITY_TOKEN_FILE
+      value: /var/run/secrets/aws/token
+  volumes:
+    - name: aws-web-identity
+      projected:
+        sources:
+          - serviceAccountToken:
+              audience: sts.amazonaws.com
+              expirationSeconds: 3600
+              path: token
+  volumeMounts:
+    - name: aws-web-identity
+      mountPath: /var/run/secrets/aws
+      readOnly: true
+
+node:
+  enableLinux: true
+  enableWindows: false

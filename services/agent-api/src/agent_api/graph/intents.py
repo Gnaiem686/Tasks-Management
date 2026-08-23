@@ -41,6 +41,22 @@ def classify_intent(question: str, *, default_scope: str | None = None) -> Inten
         term in text for term in ("risk", "overload", "improved", "situation")
     ):
         return Intent.EXPLAIN_HISTORY
+    factual_task_phrases = (
+        "tasks are done",
+        "tasks have a missing estimate",
+        "tasks are blocked",
+        "work is blocked",
+        "tasks are overdue",
+        "tasks are due soon",
+        "that task",
+        "that issue",
+    )
+    issue_key = re.search(r"\b[A-Z][A-Z0-9]{1,19}-\d+\b", question.upper())
+    if any(phrase in text for phrase in factual_task_phrases) or (
+        issue_key
+        and any(term in text for term in ("status", "assigned", "assignee", "who"))
+    ):
+        return Intent.JIRA_TASK_QUERY
     if any(term in text for term in ("improved", "improvement", "changed since")):
         return Intent.EXPLAIN_HISTORY
     has_issue_due_date = "due date" in text and re.search(
@@ -80,6 +96,8 @@ def classify_intent(question: str, *, default_scope: str | None = None) -> Inten
         return Intent.EXPLAIN_HISTORY
     if "project" in text and any(word in text for word in ("risk", "late", "delay")):
         return Intent.EXPLAIN_PROJECT_RISK
+    if asks_for_employee and any(word in text for word in ("risk", "overload")):
+        return Intent.EXPLAIN_PROJECT_RISK
     if "employee" in text and any(
         word in text for word in ("overload", "progress", "finish", "workload")
     ):
@@ -110,4 +128,4 @@ def classify_intent(question: str, *, default_scope: str | None = None) -> Inten
         term in text for term in work_terms
     ):
         return Intent.EXPLAIN_PROJECT_RISK
-    return Intent.UNSUPPORTED
+    return Intent.EXPLAIN_PROJECT_RISK

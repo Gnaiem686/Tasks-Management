@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from collections.abc import Callable, Mapping
 from datetime import UTC, date, datetime, timedelta
+from hashlib import sha256
 from typing import Any, Literal, Protocol, cast
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -32,6 +34,15 @@ class DashboardScorer(Protocol):
     ) -> dict[str, Any]: ...
 
 
+class ProgressHistoryRecorder(Protocol):
+    async def record(
+        self,
+        project_key: str,
+        rows: tuple[JiraIssueEvidence, ...],
+        correlation_id: str,
+    ) -> None: ...
+
+
 class WorkforceProfile(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     employee_id: str = Field(min_length=1)
@@ -51,6 +62,7 @@ class DashboardService:
         jira_site_url: str,
         today: Callable[[], date],
         environment: Literal["dev", "prod", "test"] = "test",
+        history: ProgressHistoryRecorder | None = None,
     ) -> None:
         self._jira = jira
         self._scoring = scoring
@@ -58,6 +70,7 @@ class DashboardService:
         self._jira_site_url = jira_site_url.rstrip("/")
         self._today = today
         self._environment = environment
+        self._history = history
 
     async def build(self, project_key: str, correlation_id: str) -> DashboardSnapshot:
         project = require_configured_project(project_key)
@@ -68,6 +81,17 @@ class DashboardService:
         )
         if any(not row.key.startswith(f"{project.key}-") for row in rows):
             raise ValueError("Jira returned evidence outside the requested project")
+        history_degraded = False
+        if self._history is not None:
+            try:
+                await self._history.record(project.key, rows, correlation_id)
+            except Exception:
+                history_degraded = True
+                logging.getLogger(__name__).exception(
+                    "progress_history_record_failed correlation_id=%s project=%s",
+                    correlation_id,
+                    project.key,
+                )
         tasks = tuple(self._task(row) for row in rows)
         active_rows = tuple(row for row in rows if not self._is_done(row.status))
         grouped: dict[str, list[JiraIssueEvidence]] = defaultdict(list)
@@ -94,9 +118,7 @@ class DashboardService:
             and today <= row.due_date <= today + timedelta(days=7)
             for row in active_rows
         )
-        blocked = sum(
-            self._blocker(row) is not None or bool(row.links) for row in active_rows
-        )
+        blocked = sum(self._is_blocked(row) for row in active_rows)
         missing = tuple(
             f"{row.key}.remaining_estimate"
             for row in active_rows
@@ -107,6 +129,7 @@ class DashboardService:
             AlertSummary(
                 subject_id=employee.employee_id,
                 severity=cast(Literal["medium", "high", "critical"], employee.level),
+                score=cast(int, employee.score),
                 reason=employee.top_risk,
             )
             for employee in employees
@@ -143,6 +166,8 @@ class DashboardService:
                 ),
             ),
             missing_evidence=missing,
+            degraded=history_degraded,
+            missing_sources=("progress_history",) if history_degraded else (),
         )
 
     async def _employee(
@@ -165,6 +190,21 @@ class DashboardService:
         level = "insufficient-data"
         if profile is not None and remaining is not None:
             today = self._today()
+            issue_refs = tuple(f"jira:{row.key}" for row in rows)
+            project_key = rows[0].key.split("-", 1)[0]
+            evidence_references = {
+                "utilization": (
+                    *(f"{ref}:remaining_estimate" for ref in issue_refs),
+                    f"profile:{profile.employee_id}:capacity",
+                ),
+                "overdue_work": tuple(f"{ref}:duedate" for ref in issue_refs),
+                "blocked_work": tuple(f"{ref}:blocker_and_links" for ref in issue_refs),
+                "priority_load": tuple(f"{ref}:priority" for ref in issue_refs),
+                "due_soon_load": tuple(f"{ref}:duedate" for ref in issue_refs),
+                "active_task_count": tuple(f"{ref}:status" for ref in issue_refs),
+                "concurrent_projects": (f"jira:{project_key}:project",),
+                "stale_work": tuple(f"{ref}:updated" for ref in issue_refs),
+            }
             input_data = EmployeeOverloadInput(
                 employee_id=profile.employee_id,
                 environment=self._environment,
@@ -192,8 +232,13 @@ class DashboardService:
                     for row in rows
                 ),
                 evidence_timestamp=max(row.evidence_timestamp for row in rows),
+                evidence_references=evidence_references,
             )
-            result = await self._scoring.score(input_data, correlation_id)
+            child_correlation = (
+                f"{correlation_id[:100]}:score:"
+                f"{sha256(profile.employee_id.encode()).hexdigest()[:12]}"
+            )
+            result = await self._scoring.score(input_data, child_correlation)
             score = result.get("score")
             level = str(result.get("level") or "insufficient-data")
         top_risk = self._top_risk(rows, remaining, profile)
@@ -211,6 +256,17 @@ class DashboardService:
         )
 
     def _task(self, row: JiraIssueEvidence) -> TaskSummary:
+        raw_remaining = (
+            row.remaining_estimate_seconds / 3600
+            if row.remaining_estimate_seconds is not None
+            else None
+        )
+        done = self._is_done(row.status)
+        data_quality_findings = (
+            ("Completed task has a non-zero Jira remaining estimate.",)
+            if done and raw_remaining not in {None, 0}
+            else ()
+        )
         return TaskSummary(
             key=row.key,
             summary=row.summary,
@@ -224,11 +280,15 @@ class DashboardService:
                 if row.original_estimate_seconds is not None
                 else None
             ),
-            remaining_hours=(
-                row.remaining_estimate_seconds / 3600
-                if row.remaining_estimate_seconds is not None
+            remaining_hours=0 if done else raw_remaining,
+            raw_remaining_hours=raw_remaining,
+            time_spent_hours=(
+                row.time_spent_seconds / 3600
+                if row.time_spent_seconds is not None
                 else None
             ),
+            jira_updated_at=row.activity_timestamp,
+            data_quality_findings=data_quality_findings,
             required_skills=row.required_skills,
             blocker=self._blocker(row),
             dependencies=tuple(
@@ -250,6 +310,13 @@ class DashboardService:
                 if field.logical_name == "blocker_category" and field.value
             ),
             None,
+        )
+
+    @classmethod
+    def _is_blocked(cls, row: JiraIssueEvidence) -> bool:
+        return cls._blocker(row) is not None or any(
+            link.relationship.casefold().strip() == "is blocked by"
+            for link in row.links
         )
 
     def _top_risk(

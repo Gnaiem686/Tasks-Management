@@ -1,0 +1,14 @@
+deploymentMode: SingleBinary
+
+loki:
+  commonConfig:
+    replication_factor: 1
+
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: true
+    storageClass: workforce-ebs-gp3-retain
+    accessModes:
+      - ReadWriteOnce
+    size: 10Gi

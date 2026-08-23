@@ -58,7 +58,7 @@ class CapacityChange(BaseModel):
 
 class ProfileCreatePayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    employee_id: str = Field(pattern=r"^EMP-00[1-7]$")
+    employee_id: str = Field(pattern=r"^[A-Z][A-Z0-9_-]{2,63}$")
     role: str = Field(min_length=1, max_length=128)
     seniority: Seniority
     documented_skills: tuple[DocumentedSkill, ...]

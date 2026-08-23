@@ -92,33 +92,47 @@ def test_overlapping_capacity_overrides_and_excess_allocation_are_rejected() -> 
 
 
 @pytest.mark.unit
-def test_exactly_seven_unique_profiles_and_two_configured_jira_mappings() -> None:
-    profiles = [profile(number) for number in range(1, 8)]
-    profiles[0] = profile(1, jira_account_id="synthetic-current-account")
-    profiles[1] = profile(2, jira_account_id="synthetic-target-account")
+def test_dynamic_profile_set_accepts_real_project_team_without_fixed_count() -> None:
+    profiles = [
+        profile(number, employee_id=f"WFD-EMP-{number:03d}") for number in range(1, 5)
+    ]
+    profiles[0] = profile(
+        1,
+        employee_id="WFD-EMP-001",
+        jira_account_id="wfd-account-one",
+    )
+    profiles[1] = profile(
+        2,
+        employee_id="WFD-EMP-002",
+        jira_account_id="wfd-account-two",
+    )
 
     validate_profile_set(
         profiles,
         environment="dev",
-        jira_mapping_employee_ids={"EMP-001", "EMP-002"},
+        jira_mapping_employee_ids={"WFD-EMP-001", "WFD-EMP-002"},
     )
 
     with pytest.raises(ValueError, match="unique"):
         validate_profile_set(
-            [*profiles[:-1], profile(1)],
+            [*profiles[:-1], profiles[0]],
             environment="dev",
-            jira_mapping_employee_ids={"EMP-001", "EMP-002"},
+            jira_mapping_employee_ids={"WFD-EMP-001", "WFD-EMP-002"},
         )
     invalid_mapping = [
         *profiles[:2],
-        profile(3, jira_account_id="not-allowed"),
+        profile(
+            3,
+            employee_id="WFD-EMP-003",
+            jira_account_id="not-allowed",
+        ),
         *profiles[3:],
     ]
     with pytest.raises(ValueError, match="Jira account mapping"):
         validate_profile_set(
             invalid_mapping,
             environment="dev",
-            jira_mapping_employee_ids={"EMP-001", "EMP-002"},
+            jira_mapping_employee_ids={"WFD-EMP-001", "WFD-EMP-002"},
         )
 
 

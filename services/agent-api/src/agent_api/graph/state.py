@@ -7,10 +7,15 @@ from workforce_contracts.auth import ApplicationRole
 from workforce_risk.models import RiskResult
 
 from agent_api.dashboard.models import DashboardSnapshot
+from agent_api.evidence.models import (
+    EvidenceEntity,
+    EvidencePlan,
+    UniversalEvidenceBundle,
+)
 from agent_api.graph.intents import Intent
 from agent_api.llm.schemas import ExplanationResponse
 from agent_api.risk_evidence import RiskEvidenceDossier
-from agent_api.task_queries import TaskQueryResult
+from agent_api.task_queries import GroundedAnswerContext, TaskQueryResult
 
 
 class VerifiedAgentContext(BaseModel):
@@ -41,10 +46,14 @@ class GraphState(TypedDict):
     steps_used: int
     tool_calls_used: int
     intent: NotRequired[Intent]
+    evidence_plan: NotRequired[EvidencePlan]
+    universal_evidence: NotRequired[UniversalEvidenceBundle]
+    ambiguous_references: NotRequired[tuple[EvidenceEntity, ...]]
     risk: NotRequired[RiskResult]
     evidence_dossier: NotRequired[RiskEvidenceDossier]
     previous_evidence_dossier: NotRequired[RiskEvidenceDossier]
     task_query_result: NotRequired[TaskQueryResult]
+    previous_answer_context: NotRequired[GroundedAnswerContext]
     project_snapshot: NotRequired[DashboardSnapshot]
     explanation: NotRequired[ExplanationResponse]
     capability_guidance: NotRequired[str]
@@ -62,3 +71,4 @@ class InvestigationResponse(BaseModel):
     missing_sources: tuple[str, ...] = ()
     steps_used: int
     tool_calls_used: int
+    answer_context: GroundedAnswerContext | None = None

@@ -20,6 +20,7 @@ in later tasks; `planned` never means implemented or passing.
 | 1.9 | `tests/security/test_prompt_policy.py` | security gate | planned |
 | 1.10 | `domain/workforce_risk/tests/test_finding_score_families.py` | unit gate | planned |
 | 1.11 | `tests/integration/test_comment_evidence_lifecycle.py` | unit and integration gates | planned |
+| 1.12 | `services/agent-api/tests/test_general_question_matrix.py` and `test_universal_grounding.py` | generalized chat acceptance gate | implemented |
 | 2.1 | `tests/contract/test_mcp_inventory.py` | contract gate | planned |
 | 2.2 | `tests/integration/test_jira_mcp_transport.py` | dev integration gate | planned |
 | 2.3 | `tests/security/test_no_runtime_rest_bypass.py` | security gate | planned |
@@ -54,3 +55,15 @@ in later tasks; `planned` never means implemented or passing.
 | 8.1 | `skills/workforce-risk-triage/tests/` | skill verification | planned |
 | 8.2 | `skills/deploy-and-verify-environment/tests/` | skill verification | planned |
 | 8.3 | `skills/safe-jira-reassignment-demo/tests/` | skill verification | planned |
+
+## Conversational evidence and Bedrock grounding
+
+| Requirement | Automated evidence | Expected proof |
+|---|---|---|
+| Question-compatible evidence planning | `services/agent-api/tests/test_evidence_plan_normalizer.py` | Blocker, deadline, employee, capacity, skills, explicit issue, and follow-up wording select compatible read-only evidence without a fixed intent whitelist. |
+| Focused structured evidence | `services/agent-api/tests/test_answer_evidence_focus.py` and `test_evidence_collectors.py` | Exact matching tasks and employees, blocker direction, deadline order, missing estimates, and deterministic levels are retained in `AnswerEvidenceSet`. |
+| Conversation references | `services/agent-api/tests/test_conversation_references.py` and `test_general_question_matrix.py` | Task and employee referents survive across turns; ambiguous singular references are not guessed. |
+| Bedrock-only final prose | `services/agent-api/tests/test_explanations.py` and `test_project_chat.py` | Every successful chat response reports `source=bedrock`; deterministic code supplies and validates facts but does not write final prose. |
+| Focused factual grounding | `services/agent-api/tests/test_universal_grounding.py` | Unknown Jira issues, changed risk levels, invented dependencies, omitted exhaustive matches, and vague insufficiency despite usable evidence are rejected. |
+| Precise last-resort missing data | `services/agent-api/tests/test_universal_grounding.py` | Bedrock may request an exact missing field for an exact entity only after focused evidence has been derived. |
+| Persistent transient recovery | `services/agent-api/tests/ui/test_contextual_chat.py` | Retryable Bedrock timeouts/throttling keep the UI waiting and preserve the eventual Bedrock answer without showing a transient failure bubble. |

@@ -6,9 +6,10 @@ from pydantic import BaseModel, ConfigDict
 from workforce_risk.models import FactorContribution, RiskResult
 
 from agent_api.dashboard.models import DashboardSnapshot
+from agent_api.evidence.models import UniversalEvidenceBundle
 from agent_api.historical_evidence import compare_dossiers
 from agent_api.risk_evidence import RiskEvidenceDossier
-from agent_api.task_queries import TaskQueryResult
+from agent_api.task_queries import GroundedAnswerContext, TaskQueryResult
 
 
 class ExplanationRequest(BaseModel):
@@ -20,6 +21,8 @@ class ExplanationRequest(BaseModel):
     task_query_result: TaskQueryResult | None = None
     evidence_dossier: RiskEvidenceDossier | None = None
     previous_evidence_dossier: RiskEvidenceDossier | None = None
+    previous_answer_context: GroundedAnswerContext | None = None
+    universal_evidence: UniversalEvidenceBundle | None = None
     candidate_ids: tuple[str, ...] = ()
     untrusted_evidence: tuple[str, ...] = ()
     correlation_id: str
@@ -51,6 +54,29 @@ class ExplanationResponse(ModelExplanation):
 
 def build_model_payload(request: ExplanationRequest) -> dict[str, object]:
     """Allowlist only deterministic, work-planning evidence for Bedrock."""
+    if request.universal_evidence is not None:
+        bundle = request.universal_evidence
+        return {
+            "workflow": "general_evidence_question",
+            "question": request.question[:1_000],
+            "answer_evidence": (
+                bundle.answer_evidence.model_dump(mode="json")
+                if bundle.answer_evidence is not None
+                else None
+            ),
+            "universal_evidence": bundle.model_dump(mode="json"),
+            "missing_evidence": [
+                item.model_dump(mode="json") for item in bundle.missing_data
+            ],
+            "evidence_references": [
+                f"jira:{task.key}:summary"
+                for task in (
+                    bundle.project_snapshot.tasks if bundle.project_snapshot else ()
+                )
+            ],
+            "correlation_id": request.correlation_id,
+            "previous_answer_context": _previous_context(request),
+        }
     risk = request.risk
     if risk is None:
         if request.task_query_result is not None:
@@ -61,6 +87,7 @@ def build_model_payload(request: ExplanationRequest) -> dict[str, object]:
                 "task_query": result.model_dump(mode="json"),
                 "evidence_references": list(result.evidence_references),
                 "correlation_id": request.correlation_id,
+                "previous_answer_context": _previous_context(request),
             }
         assert request.project_snapshot is not None
         snapshot = request.project_snapshot
@@ -73,6 +100,7 @@ def build_model_payload(request: ExplanationRequest) -> dict[str, object]:
             ],
             "missing_evidence": list(snapshot.missing_evidence),
             "correlation_id": request.correlation_id,
+            "previous_answer_context": _previous_context(request),
         }
     ordered_factors = sorted(
         risk.factors,
@@ -177,4 +205,10 @@ def build_model_payload(request: ExplanationRequest) -> dict[str, object]:
         "historical_comparison": comparison,
         "candidate_ids": list(request.candidate_ids),
         "correlation_id": request.correlation_id,
+        "previous_answer_context": _previous_context(request),
     }
+
+
+def _previous_context(request: ExplanationRequest) -> dict[str, object] | None:
+    context = request.previous_answer_context
+    return context.model_dump(mode="json") if context is not None else None

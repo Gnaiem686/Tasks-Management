@@ -75,6 +75,15 @@ def test_compose_runs_complete_local_stack_with_safe_runtime_boundaries() -> Non
     )
 
 
+def test_compose_passes_authoritative_dashboard_profiles_to_agent_api() -> None:
+    compose = yaml.safe_load((ROOT / "compose.yaml").read_text())
+
+    assert (
+        compose["services"]["agent-api"]["environment"]["WORKFORCE_DASHBOARD_PROFILES"]
+        == "${WORKFORCE_DASHBOARD_PROFILES:-{}}"
+    )
+
+
 def test_compose_does_not_embed_production_credentials_or_jira_tokens() -> None:
     text = (ROOT / "compose.yaml").read_text().lower()
 

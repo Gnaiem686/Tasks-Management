@@ -1,0 +1,68 @@
+groups:
+  - name: workforce-local-health
+    rules:
+      - alert: WorkforceServiceDown
+        expr: probe_success == 0
+        for: 2m
+        labels:
+          severity: critical
+          owner: workforce-platform
+          environment: dev
+        annotations:
+          summary: A Workforce Risk Manager dependency is unreachable.
+          description: "Probe failed for {{ $labels.instance }}."
+
+      - alert: WorkforceApiServerErrorSpike
+        expr: sum(increase(workforce_http_requests_total{outcome="server_error"}[5m])) > 3
+        for: 1m
+        labels:
+          severity: warning
+          owner: workforce-platform
+          environment: dev
+        annotations:
+          summary: Agent API server errors are increasing.
+          description: More than three server errors occurred in five minutes.
+
+      - alert: WorkforceApiHighLatency
+        expr: probe_duration_seconds{job="service-probes",instance="http://agent-api:8000/health/ready"} > 2
+        for: 5m
+        labels:
+          severity: warning
+          owner: workforce-platform
+          environment: dev
+        annotations:
+          summary: Agent API health latency is elevated.
+          description: The local end-to-end health probe has exceeded two seconds.
+
+      - alert: WorkforceBedrockFailure
+        expr: increase(promtail_custom_workforce_bedrock_log_failures_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          owner: workforce-platform
+          environment: dev
+        annotations:
+          summary: Bedrock failures or rejected responses were detected.
+          description: Inspect correlated Agent API logs in Grafana Loki.
+
+      - alert: WorkforceToolTimeout
+        expr: increase(promtail_custom_workforce_tool_timeouts_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          owner: workforce-platform
+          environment: dev
+        annotations:
+          summary: An MCP or tool timeout was detected.
+          description: Inspect the Agent and MCP service logs in Grafana Loki.
+
+      - alert: WorkforceLogsMissing
+        expr: up{job="promtail"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          owner: workforce-platform
+          environment: dev
+        annotations:
+          summary: Centralized log collection is unavailable.
+          description: Prometheus cannot scrape Promtail metrics.

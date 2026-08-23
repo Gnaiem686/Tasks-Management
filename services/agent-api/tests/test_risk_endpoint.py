@@ -135,13 +135,18 @@ class JiraClient:
 
 class BedrockTaskExplainer:
     async def explain(self, request: ExplanationRequest) -> ExplanationResponse:
-        assert request.task_query_result is not None
+        assert request.universal_evidence is not None
+        assert request.universal_evidence.project_snapshot is not None
+        assert any(
+            task.key == "WRD-4" and task.due_date is not None
+            for task in request.universal_evidence.project_snapshot.tasks
+        )
         return ExplanationResponse(
-            answer="WRD-4 is due on the date returned by Jira.",
-            summary="WRD-4 deadline",
+            answer="WRD-4 is due on 2026-07-23.",
+            summary="WRD-4 is due on 2026-07-23.",
             root_causes=(),
             recommendations=(),
-            citations=request.task_query_result.evidence_references,
+            citations=("jira:WRD-4:duedate",),
             score=None,
             risk_level=None,
             uncertainties=(),
@@ -181,8 +186,10 @@ async def test_investigation_due_date_question_returns_jira_mcp_fact() -> None:
     assert body["intent"] == "jira_task_query"
     assert body["risk"] is None
     assert body["explanation"]["source"] == "bedrock"
-    assert body["explanation"]["answer"] == (
-        "WRD-4 is due on the date returned by Jira."
+    assert body["explanation"]["answer"] == "WRD-4 is due on 2026-07-23."
+    assert body["answer_context"]["issues"][0]["key"] == "WRD-4"
+    assert body["answer_context"]["previous_question"] == (
+        "What is the due date of WRD-4?"
     )
 
 

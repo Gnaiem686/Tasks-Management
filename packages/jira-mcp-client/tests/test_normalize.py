@@ -24,8 +24,10 @@ def load_response() -> dict[str, Any]:
 
 @pytest.mark.unit
 def test_normalizes_structured_issue_and_keeps_free_text_untrusted() -> None:
+    raw = load_response()
+    raw["data"]["fields"]["timespent"] = 7200
     evidence = normalize_issue(
-        load_response(),
+        raw,
         expected_environment="dev",
         expected_correlation_id="corr-wrd-1",
         custom_fields={"blocker_category": "customfield_10042"},
@@ -41,6 +43,7 @@ def test_normalizes_structured_issue_and_keeps_free_text_untrusted() -> None:
     assert evidence.due_date.isoformat() == "2026-07-23"
     assert evidence.original_estimate_seconds == 28800
     assert evidence.remaining_estimate_seconds == 14400
+    assert evidence.time_spent_seconds == 7200
     assert evidence.links[0].issue_key == "WRD-2"
     assert evidence.activity_timestamp.isoformat() == "2026-08-06T10:30:00+00:00"
     assert evidence.custom_fields[0].raw_field_id == "customfield_10042"

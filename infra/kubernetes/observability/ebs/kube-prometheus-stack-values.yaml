@@ -1,0 +1,21 @@
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: workforce-ebs-gp3-retain
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 10Gi
+
+grafana:
+  persistence:
+    enabled: true
+    type: pvc
+    storageClassName: workforce-ebs-gp3-retain
+    accessModes:
+      - ReadWriteOnce
+    size: 2Gi
