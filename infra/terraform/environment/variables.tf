@@ -117,3 +117,12 @@ variable "ses_identity_arn" {
   description = "Verified SES domain or email identity ARN; verification is an external gate."
   type        = string
 }
+
+variable "platform_alert_email" {
+  description = "Email endpoint subscribed to operational platform-health alerts."
+  type        = string
+  validation {
+    condition     = can(regex("^[^@]+@[^@]+\\.[^@]+$", var.platform_alert_email))
+    error_message = "platform_alert_email must be a valid email address."
+  }
+}

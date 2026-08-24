@@ -36,6 +36,7 @@ jobs:
       TF_VAR_postgres_engine_version: ${{ vars.POSTGRES_ENGINE_VERSION }}
       TF_VAR_bedrock_model_id: ${{ vars.BEDROCK_MODEL_ID }}
       TF_VAR_ses_identity_arn: ${{ vars.SES_IDENTITY_ARN }}
+      TF_VAR_platform_alert_email: ${{ vars.PLATFORM_ALERT_EMAIL }}
       TF_VAR_cluster_oidc_provider_arn: ${{ vars.CLUSTER_OIDC_PROVIDER_ARN }}
       TF_VAR_cluster_oidc_issuer_hostpath: ${{ vars.CLUSTER_OIDC_ISSUER_HOSTPATH }}
       TF_VAR_github_repository: ${{ github.repository }}

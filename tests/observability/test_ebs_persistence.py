@@ -63,6 +63,31 @@ def test_prometheus_and_grafana_request_independent_ebs_storage() -> None:
     assert grafana["accessModes"] == ["ReadWriteOnce"]
 
 
+def test_grafana_is_publicly_exposed_as_anonymous_viewer_under_subpath() -> None:
+    values = _yaml("kube-prometheus-stack-values.yaml")
+    grafana = values["grafana"]
+    ingress = _yaml("grafana-public-ingress.yaml")
+
+    assert grafana["grafana.ini"]["server"] == {
+        "root_url": "%(protocol)s://%(domain)s/grafana/",
+        "serve_from_sub_path": True,
+    }
+    assert grafana["grafana.ini"]["auth.anonymous"] == {
+        "enabled": True,
+        "org_role": "Viewer",
+    }
+    assert grafana["grafana.ini"]["auth"]["disable_login_form"] is True
+    assert ingress["metadata"]["namespace"] == "monitoring"
+    assert ingress["spec"]["ingressClassName"] == "nginx"
+    path = ingress["spec"]["rules"][0]["http"]["paths"][0]
+    assert path["path"] == "/grafana"
+    assert path["pathType"] == "Prefix"
+    assert path["backend"]["service"] == {
+        "name": "workforce-monitoring-grafana",
+        "port": {"number": 80},
+    }
+
+
 def test_loki_requests_its_own_ebs_storage() -> None:
     values = _yaml("loki-values.yaml")
     persistence = values["singleBinary"]["persistence"]
