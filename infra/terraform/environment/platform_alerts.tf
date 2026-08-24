@@ -1,3 +1,7 @@
+locals {
+  alertmanager_oidc_provider_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${local.cluster_oidc_hostpath}"
+}
+
 resource "aws_sns_topic" "platform_alerts" {
   name              = "${var.project_name}-platform-alerts"
   kms_master_key_id = "alias/aws/sns"
@@ -18,7 +22,7 @@ data "aws_iam_policy_document" "alertmanager_sns_assume" {
     actions = ["sts:AssumeRoleWithWebIdentity"]
     principals {
       type        = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.kubernetes.arn]
+      identifiers = [local.alertmanager_oidc_provider_arn]
     }
     condition {
       test     = "StringEquals"
