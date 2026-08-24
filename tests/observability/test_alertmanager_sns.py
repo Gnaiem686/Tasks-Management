@@ -33,6 +33,7 @@ def test_alertmanager_routes_platform_alerts_to_sns() -> None:
     assert sns == {
         "topic_arn": "WORKFORCE_PLATFORM_ALERT_TOPIC_ARN",
         "sigv4": {"region": "WORKFORCE_AWS_REGION"},
+        "subject": "[Workforce Risk] Platform health alert",
         "send_resolved": True,
     }
 
