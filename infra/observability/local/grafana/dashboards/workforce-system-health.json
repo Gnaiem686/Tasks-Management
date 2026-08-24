@@ -13,15 +13,16 @@
         "defaults": {
           "color": {"mode": "thresholds"},
           "mappings": [],
-          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 5}]}
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 80}, {"color": "green", "value": 100}]},
+          "unit": "percent"
         },
         "overrides": []
       },
       "gridPos": {"h": 5, "w": 4, "x": 0, "y": 0},
       "id": 1,
       "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
-      "targets": [{"editorMode": "code", "expr": "sum(probe_success)", "legendFormat": "reachable", "range": true, "refId": "A"}],
-      "title": "Services Up",
+      "targets": [{"editorMode": "code", "expr": "100 * sum(probe_success) / clamp_min(count(probe_success), 1)", "legendFormat": "healthy", "range": true, "refId": "A"}],
+      "title": "Service Probe Health",
       "type": "stat"
     },
     {
@@ -40,7 +41,7 @@
       "gridPos": {"h": 5, "w": 4, "x": 12, "y": 0},
       "id": 3,
       "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
-      "targets": [{"editorMode": "code", "expr": "sum(increase(workforce_http_requests_total{outcome=\"server_error\"}[15m]))", "legendFormat": "errors", "range": true, "refId": "A"}],
+      "targets": [{"editorMode": "code", "expr": "sum(increase(workforce_http_requests_total{outcome=\"server_error\"}[15m])) or vector(0)", "legendFormat": "errors", "range": true, "refId": "A"}],
       "title": "Agent API Server Errors",
       "type": "stat"
     },
@@ -60,7 +61,7 @@
       "gridPos": {"h": 5, "w": 6, "x": 0, "y": 5},
       "id": 5,
       "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
-      "targets": [{"editorMode": "code", "expr": "sum(increase(promtail_custom_workforce_bedrock_log_failures_total[15m]))", "legendFormat": "failures", "range": true, "refId": "A"}],
+      "targets": [{"editorMode": "code", "expr": "sum(increase(promtail_custom_workforce_bedrock_log_failures_total[15m])) or vector(0)", "legendFormat": "failures", "range": true, "refId": "A"}],
       "title": "Bedrock Failures",
       "type": "stat"
     },
@@ -70,7 +71,7 @@
       "gridPos": {"h": 5, "w": 6, "x": 6, "y": 5},
       "id": 6,
       "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
-      "targets": [{"editorMode": "code", "expr": "sum(increase(promtail_custom_workforce_tool_timeouts_total[15m]))", "legendFormat": "timeouts", "range": true, "refId": "A"}],
+      "targets": [{"editorMode": "code", "expr": "sum(increase(promtail_custom_workforce_tool_timeouts_total[15m])) or vector(0)", "legendFormat": "timeouts", "range": true, "refId": "A"}],
       "title": "MCP and Tool Timeouts",
       "type": "stat"
     },
@@ -80,7 +81,7 @@
       "gridPos": {"h": 6, "w": 6, "x": 12, "y": 5},
       "id": 7,
       "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
-      "targets": [{"editorMode": "code", "expr": "rate(container_cpu_usage_seconds_total{id=\"/\"}[5m])", "legendFormat": "system", "range": true, "refId": "A"}],
+      "targets": [{"editorMode": "code", "expr": "sum(rate(container_cpu_usage_seconds_total{job=\"kubelet\",metrics_path=\"/metrics/cadvisor\",container!=\"\",image!=\"\"}[5m])) or rate(container_cpu_usage_seconds_total{id=\"/\"}[5m])", "legendFormat": "system", "range": true, "refId": "A"}],
       "title": "System CPU",
       "type": "timeseries"
     },
@@ -90,7 +91,7 @@
       "gridPos": {"h": 6, "w": 6, "x": 18, "y": 5},
       "id": 8,
       "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
-      "targets": [{"editorMode": "code", "expr": "container_memory_working_set_bytes{id=\"/\"}", "legendFormat": "system", "range": true, "refId": "A"}],
+      "targets": [{"editorMode": "code", "expr": "sum(container_memory_working_set_bytes{job=\"kubelet\",metrics_path=\"/metrics/cadvisor\",container!=\"\",image!=\"\"}) or container_memory_working_set_bytes{id=\"/\"}", "legendFormat": "system", "range": true, "refId": "A"}],
       "title": "System Memory",
       "type": "timeseries"
     },
@@ -99,7 +100,7 @@
       "gridPos": {"h": 9, "w": 24, "x": 0, "y": 11},
       "id": 9,
       "options": {"dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showCommonLabels": false, "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true},
-      "targets": [{"datasource": {"type": "loki", "uid": "workforce-loki"}, "editorMode": "code", "expr": "{compose_project=\"cicd-dev-promotion\"}", "queryType": "range", "refId": "A"}],
+      "targets": [{"datasource": {"type": "loki", "uid": "workforce-loki"}, "editorMode": "code", "expr": "{environment=~\"dev|prod\",service_name=~\"agent-api|workforce-risk-mcp|devops-mcp\"} | line_format \"{{.service_name}} | {{ __line__ }}\"", "queryType": "range", "refId": "A"}],
       "title": "Recent Service Logs",
       "type": "logs"
     }

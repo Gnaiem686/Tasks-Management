@@ -32,3 +32,11 @@ output "ebs_csi_controller_role_arn" {
   value     = aws_iam_role.ebs_csi_controller.arn
   sensitive = true
 }
+
+output "platform_alert_topic_arn" {
+  value = aws_sns_topic.platform_alerts.arn
+}
+
+output "alertmanager_sns_role_arn" {
+  value = aws_iam_role.alertmanager_sns.arn
+}

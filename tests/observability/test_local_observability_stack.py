@@ -89,7 +89,7 @@ def test_grafana_provisions_prometheus_loki_and_health_dashboard() -> None:
     )
     titles = {panel["title"] for panel in dashboard["panels"]}
     assert {
-        "Services Up",
+        "Service Probe Health",
         "Agent API Requests",
         "Agent API Server Errors",
         "Endpoint Probe Latency",
@@ -115,11 +115,43 @@ def test_grafana_provisions_prometheus_loki_and_health_dashboard() -> None:
     )
     assert any(
         'container_cpu_usage_seconds_total{id="/"}' in expression
+        and 'job="kubelet"' in expression
         for expression in expressions
     )
     assert any(
         'container_memory_working_set_bytes{id="/"}' in expression
+        and 'job="kubelet"' in expression
         for expression in expressions
+    )
+
+
+def test_health_dashboard_handles_aws_kubernetes_empty_and_probe_series() -> None:
+    dashboard = json.loads(
+        (LOCAL / "grafana" / "dashboards" / "workforce-system-health.json").read_text()
+    )
+    panels = {panel["title"]: panel for panel in dashboard["panels"]}
+
+    service_health = panels["Service Probe Health"]
+    assert "count(probe_success)" in service_health["targets"][0]["expr"]
+    assert service_health["fieldConfig"]["defaults"]["unit"] == "percent"
+
+    for title in (
+        "Agent API Server Errors",
+        "Bedrock Failures",
+        "MCP and Tool Timeouts",
+    ):
+        assert panels[title]["targets"][0]["expr"].endswith(" or vector(0)")
+
+    assert 'job="kubelet"' in panels["System CPU"]["targets"][0]["expr"]
+    assert 'id="/"' in panels["System CPU"]["targets"][0]["expr"]
+    assert 'job="kubelet"' in panels["System Memory"]["targets"][0]["expr"]
+    assert 'id="/"' in panels["System Memory"]["targets"][0]["expr"]
+
+    logs = panels["Recent Service Logs"]["targets"][0]["expr"]
+    assert logs == (
+        '{environment=~"dev|prod",'
+        'service_name=~"agent-api|workforce-risk-mcp|devops-mcp"} '
+        '| line_format "{{.service_name}} | {{ __line__ }}"'
     )
 
 
