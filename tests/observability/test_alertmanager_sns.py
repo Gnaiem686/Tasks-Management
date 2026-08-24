@@ -14,6 +14,12 @@ def _values() -> dict[str, Any]:
     )
 
 
+def test_monitoring_chart_pin_matches_the_deployed_cluster() -> None:
+    versions = (EBS / "versions.env").read_text()
+
+    assert "KUBE_PROMETHEUS_STACK_CHART_VERSION=88.5.3" in versions
+
+
 def test_alertmanager_routes_platform_alerts_to_sns() -> None:
     alertmanager = _values()["alertmanager"]
     config = alertmanager["config"]
@@ -29,6 +35,17 @@ def test_alertmanager_routes_platform_alerts_to_sns() -> None:
         "sigv4": {"region": "WORKFORCE_AWS_REGION"},
         "send_resolved": True,
     }
+
+
+def test_alertmanager_silences_permanent_informational_alerts() -> None:
+    config = _values()["alertmanager"]["config"]
+
+    null_receiver = next(item for item in config["receivers"] if item["name"] == "null")
+    assert null_receiver == {"name": "null"}
+    assert {
+        "receiver": "null",
+        "matchers": ['alertname=~"Watchdog|InfoInhibitor"'],
+    } in config["route"]["routes"]
 
 
 def test_alertmanager_uses_exact_oidc_role_and_service_account() -> None:
