@@ -35,6 +35,7 @@ alertmanager:
           - topic_arn: WORKFORCE_PLATFORM_ALERT_TOPIC_ARN
             sigv4:
               region: WORKFORCE_AWS_REGION
+            subject: "[Workforce Risk] Platform health alert"
             send_resolved: true
     inhibit_rules:
       - source_matchers:
