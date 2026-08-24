@@ -22,9 +22,7 @@ def test_alertmanager_routes_platform_alerts_to_sns() -> None:
     assert config["route"]["receiver"] == "workforce-platform-sns"
     assert config["route"]["group_by"] == ["environment", "owner", "severity"]
     receiver = next(
-        item
-        for item in config["receivers"]
-        if item["name"] == "workforce-platform-sns"
+        item for item in config["receivers"] if item["name"] == "workforce-platform-sns"
     )
     sns = receiver["sns_configs"][0]
     assert sns == {
@@ -58,9 +56,7 @@ def test_alertmanager_uses_exact_oidc_role_and_service_account() -> None:
             "readOnly": True,
         }
     ]
-    token = spec["volumes"][0]["projected"]["sources"][0][
-        "serviceAccountToken"
-    ]
+    token = spec["volumes"][0]["projected"]["sources"][0]["serviceAccountToken"]
     assert token == {
         "audience": "sts.amazonaws.com",
         "expirationSeconds": 3600,
@@ -69,7 +65,9 @@ def test_alertmanager_uses_exact_oidc_role_and_service_account() -> None:
 
 
 def test_aws_monitoring_deploy_requires_and_substitutes_terraform_outputs() -> None:
-    script = (ROOT / "scripts" / "observability" / "deploy_aws_monitoring.sh").read_text()
+    script = (
+        ROOT / "scripts" / "observability" / "deploy_aws_monitoring.sh"
+    ).read_text()
 
     assert 'require_value "PLATFORM_ALERT_TOPIC_ARN"' in script
     assert 'require_value "ALERTMANAGER_SNS_ROLE_ARN"' in script
@@ -79,4 +77,7 @@ def test_aws_monitoring_deploy_requires_and_substitutes_terraform_outputs() -> N
     assert "WORKFORCE_AWS_REGION" in script
     assert "helm upgrade --install workforce-monitoring" in script
     assert "kube-prometheus-stack" in script
-    assert 'kubectl apply -f "$PROJECT_ROOT/infra/kubernetes/observability/prometheus-rules.yaml"' in script
+    assert (
+        'kubectl apply -f "$PROJECT_ROOT/infra/kubernetes/observability/prometheus-rules.yaml"'
+        in script
+    )

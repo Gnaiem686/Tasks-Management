@@ -20,8 +20,8 @@ def test_alertmanager_role_is_bound_to_exact_monitoring_service_account() -> Non
 
     assert 'actions = ["sts:AssumeRoleWithWebIdentity"]' in terraform
     assert "aws_iam_openid_connect_provider.kubernetes.arn" in terraform
-    assert '${local.cluster_oidc_hostpath}:aud' in terraform
-    assert '${local.cluster_oidc_hostpath}:sub' in terraform
+    assert "${local.cluster_oidc_hostpath}:aud" in terraform
+    assert "${local.cluster_oidc_hostpath}:sub" in terraform
     assert 'values   = ["sts.amazonaws.com"]' in terraform
     assert (
         'values   = ["system:serviceaccount:monitoring:workforce-alertmanager"]'
