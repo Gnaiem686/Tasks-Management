@@ -97,3 +97,4 @@ def test_aws_monitoring_deploy_requires_and_substitutes_terraform_outputs() -> N
         'kubectl apply -f "$PROJECT_ROOT/infra/kubernetes/observability/'
         'prometheus-rules.yaml"' in script
     )
+    assert "statefulset/alertmanager-workforce-monitoring-kube-alertmanager" in script
