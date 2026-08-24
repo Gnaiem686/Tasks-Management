@@ -3,7 +3,6 @@ from typing import Any, cast
 
 import yaml
 
-
 ROOT = Path(__file__).parents[2]
 EBS = ROOT / "infra" / "kubernetes" / "observability" / "ebs"
 
@@ -78,6 +77,6 @@ def test_aws_monitoring_deploy_requires_and_substitutes_terraform_outputs() -> N
     assert "helm upgrade --install workforce-monitoring" in script
     assert "kube-prometheus-stack" in script
     assert (
-        'kubectl apply -f "$PROJECT_ROOT/infra/kubernetes/observability/prometheus-rules.yaml"'
-        in script
+        'kubectl apply -f "$PROJECT_ROOT/infra/kubernetes/observability/'
+        'prometheus-rules.yaml"' in script
     )
