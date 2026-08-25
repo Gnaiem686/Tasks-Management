@@ -58,7 +58,7 @@ jobs:
         run: uv sync --all-packages --frozen
 
       - name: Configure dev AWS identity
-        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v4
         with:
           role-to-assume: ${{ vars.DEV_AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
