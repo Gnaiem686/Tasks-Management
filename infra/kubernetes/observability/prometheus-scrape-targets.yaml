@@ -1,0 +1,63 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: workforce-agent-api
+  namespace: monitoring
+  labels:
+    release: workforce-monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - dev
+      - prod
+  selector:
+    matchLabels:
+      app: agent-api
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: workforce-http-services
+  namespace: monitoring
+  labels:
+    release: workforce-monitoring
+spec:
+  jobName: workforce-http-services
+  interval: 30s
+  module: http_2xx
+  prober:
+    url: blackbox-exporter.monitoring.svc.cluster.local:9115
+  targets:
+    staticConfig:
+      static:
+        - http://agent-api.dev.svc.cluster.local/health/ready
+        - http://agent-api.prod.svc.cluster.local/health/ready
+      labels:
+        scope: workforce
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: workforce-mcp-services
+  namespace: monitoring
+  labels:
+    release: workforce-monitoring
+spec:
+  jobName: workforce-mcp-services
+  interval: 30s
+  module: tcp_connect
+  prober:
+    url: blackbox-exporter.monitoring.svc.cluster.local:9115
+  targets:
+    staticConfig:
+      static:
+        - workforce-risk-mcp.dev.svc.cluster.local:8001
+        - devops-mcp.dev.svc.cluster.local:8002
+        - workforce-risk-mcp.prod.svc.cluster.local:8001
+        - devops-mcp.prod.svc.cluster.local:8002
+      labels:
+        scope: workforce

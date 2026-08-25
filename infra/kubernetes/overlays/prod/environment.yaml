@@ -5,14 +5,22 @@ metadata:
   namespace: prod
 data:
   APP_ENVIRONMENT: prod
-  ALLOW_ANONYMOUS_READ: "false"
-  ALLOW_JIRA_MUTATIONS: "false"
+  AWS_REGION: us-east-1
+  BEDROCK_MODEL_ID: amazon.nova-lite-v1:0
   BEDROCK_ONLY_CHAT: "true"
-  JIRA_PROJECT_KEY: WORKFORCE-PROD
+  ALLOW_ANONYMOUS_READ: "true"
+  ALLOW_JIRA_MUTATIONS: "false"
+  ALLOWED_JIRA_PROJECTS: "WFD:Workforce Real Data,WRD:Workforce Risk Demo"
+  EVIDENCE_MODE: jira
+  JIRA_PROJECT_KEY: WRD
+  JIRA_CLOUD_ID: https://gnaiem686.atlassian.net
+  JIRA_EMPLOYEE_ISSUE_MAP: '{"EMP-001":"WRD-2","EMP-002":"WRD-6","EMP-003":"WRD-4","EMP-004":"WRD-5","EMP-005":"WRD-7","EMP-006":"WRD-8","EMP-007":"WRD-9"}'
+  WORKFORCE_CAPACITY_MAP: '{"EMP-001":40,"EMP-002":40,"EMP-003":40,"EMP-004":40,"EMP-005":32,"EMP-006":40,"EMP-007":24}'
+  SCAN_EMPLOYEE_IDS: EMP-001,EMP-002,EMP-006
   JIRA_MUTATION_ENABLED: "false"
-  REPORT_BUCKET: workforce-risk-prod-reports
-  NOTIFICATION_QUEUE: workforce-risk-prod-notifications
-  DAILY_SCAN_SCHEDULE: "0 5 * * *"
+  REPORT_BUCKET: WORKFORCE_REPORT_BUCKET
+  NOTIFICATION_QUEUE: WORKFORCE_NOTIFICATION_QUEUE_URL
+  DAILY_SCAN_SCHEDULE: "0 6 * * *"
 ---
 apiVersion: external-secrets.io/v1
 kind: SecretStore

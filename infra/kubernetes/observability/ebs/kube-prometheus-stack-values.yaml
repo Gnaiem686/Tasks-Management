@@ -23,7 +23,7 @@ alertmanager:
       group_by: [environment, owner, severity]
       group_wait: 30s
       group_interval: 5m
-      repeat_interval: 4h
+      repeat_interval: 24h
       routes:
         - receiver: "null"
           matchers:
@@ -66,6 +66,10 @@ alertmanager:
                 path: token
 
 grafana:
+  sidecar:
+    datasources:
+      alertmanager:
+        enabled: false
   grafana.ini:
     server:
       root_url: "%(protocol)s://%(domain)s/grafana/"

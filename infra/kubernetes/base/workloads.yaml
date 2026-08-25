@@ -211,7 +211,9 @@ spec:
 ---
 apiVersion: v1
 kind: Service
-metadata: {name: agent-api}
+metadata:
+  name: agent-api
+  labels: {app: agent-api}
 spec:
   selector: {app: agent-api}
   ports: [{name: http, port: 80, targetPort: http}]

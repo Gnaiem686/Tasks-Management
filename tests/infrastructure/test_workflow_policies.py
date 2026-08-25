@@ -200,6 +200,19 @@ def test_ci_blocks_network_without_breaking_asyncio_event_loops() -> None:
     assert "--allow-unix-socket" in text
 
 
+def test_ci_runs_focused_environment_and_promotion_tests() -> None:
+    text = _text("ci.yml")
+    assert "Run focused deployment configuration tests" in text
+    for test_file in (
+        "tests/infrastructure/test_environment_config.py",
+        "tests/infrastructure/test_environment_isolation.py",
+        "tests/infrastructure/test_workflow_policies.py",
+        "tests/observability/test_alertmanager_sns.py",
+    ):
+        assert test_file in text
+    assert "infrastructure-junit.xml" in text
+
+
 def test_prod_promotion_is_manual_approval_protected_and_serialized() -> None:
     workflow = _workflow("promote-prod.yml")
     assert "workflow_dispatch" in workflow["on"]

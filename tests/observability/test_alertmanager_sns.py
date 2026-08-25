@@ -26,6 +26,9 @@ def test_alertmanager_routes_platform_alerts_to_sns() -> None:
 
     assert config["route"]["receiver"] == "workforce-platform-sns"
     assert config["route"]["group_by"] == ["environment", "owner", "severity"]
+    assert config["route"]["group_wait"] == "30s"
+    assert config["route"]["group_interval"] == "5m"
+    assert config["route"]["repeat_interval"] == "24h"
     receiver = next(
         item for item in config["receivers"] if item["name"] == "workforce-platform-sns"
     )
@@ -81,6 +84,35 @@ def test_alertmanager_uses_exact_oidc_role_and_service_account() -> None:
     }
 
 
+def test_aws_monitoring_scrapes_dev_and_prod_without_grafana_alertmanager_source() -> (
+    None
+):
+    values = _values()
+    targets = yaml.safe_load_all(
+        (
+            ROOT / "infra/kubernetes/observability/prometheus-scrape-targets.yaml"
+        ).read_text()
+    )
+    resources = list(targets)
+    service_monitor = next(
+        item for item in resources if item["kind"] == "ServiceMonitor"
+    )
+    probes = [item for item in resources if item["kind"] == "Probe"]
+
+    assert service_monitor["spec"]["namespaceSelector"]["matchNames"] == [
+        "dev",
+        "prod",
+    ]
+    rendered_targets = str(probes)
+    for environment in ("dev", "prod"):
+        assert f"agent-api.{environment}.svc.cluster.local" in rendered_targets
+        assert f"workforce-risk-mcp.{environment}.svc.cluster.local" in rendered_targets
+        assert f"devops-mcp.{environment}.svc.cluster.local" in rendered_targets
+    assert values["grafana"]["sidecar"]["datasources"]["alertmanager"] == {
+        "enabled": False
+    }
+
+
 def test_aws_monitoring_deploy_requires_and_substitutes_terraform_outputs() -> None:
     script = (
         ROOT / "scripts" / "observability" / "deploy_aws_monitoring.sh"
@@ -97,5 +129,9 @@ def test_aws_monitoring_deploy_requires_and_substitutes_terraform_outputs() -> N
     assert (
         'kubectl apply -f "$PROJECT_ROOT/infra/kubernetes/observability/'
         'prometheus-rules.yaml"' in script
+    )
+    assert (
+        'kubectl apply -f "$PROJECT_ROOT/infra/kubernetes/observability/'
+        'prometheus-scrape-targets.yaml"' in script
     )
     assert "statefulset/alertmanager-workforce-monitoring-kube-alertmanager" in script

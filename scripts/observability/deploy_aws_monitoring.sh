@@ -70,6 +70,7 @@ helm upgrade --install workforce-monitoring \
   --wait \
   --timeout 15m
 kubectl apply -f "$PROJECT_ROOT/infra/kubernetes/observability/prometheus-rules.yaml"
+kubectl apply -f "$PROJECT_ROOT/infra/kubernetes/observability/prometheus-scrape-targets.yaml"
 kubectl apply -f "$EBS_DIRECTORY/grafana-public-ingress.yaml"
 
 kubectl -n monitoring rollout status statefulset/alertmanager-workforce-monitoring-kube-alertmanager --timeout=5m

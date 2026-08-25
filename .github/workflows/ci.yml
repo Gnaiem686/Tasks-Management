@@ -66,6 +66,16 @@ jobs:
           --cov-report=term-missing
           -q
 
+      - name: Run focused deployment configuration tests
+        run: >-
+          uv run pytest
+          tests/infrastructure/test_environment_config.py
+          tests/infrastructure/test_environment_isolation.py
+          tests/infrastructure/test_workflow_policies.py
+          tests/observability/test_alertmanager_sns.py
+          --junitxml=artifacts/tests/infrastructure-junit.xml
+          -q
+
       - name: Audit locked dependencies
         run: |
           uv export --quiet --all-packages --frozen --no-dev --no-emit-workspace --output-file artifacts/security/runtime-requirements.txt
@@ -95,6 +105,7 @@ jobs:
         run: |
           echo '## Workforce Risk CI' >> "$GITHUB_STEP_SUMMARY"
           echo '- JUnit: `artifacts/tests/junit.xml`' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Deployment configuration: `artifacts/tests/infrastructure-junit.xml`' >> "$GITHUB_STEP_SUMMARY"
           echo '- Coverage: `artifacts/tests/coverage.xml`' >> "$GITHUB_STEP_SUMMARY"
           echo '- Security audit: `artifacts/security/pip-audit.json`' >> "$GITHUB_STEP_SUMMARY"
           echo '- SBOM: `artifacts/sbom/cyclonedx.json`' >> "$GITHUB_STEP_SUMMARY"
