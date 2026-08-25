@@ -257,6 +257,13 @@ def test_prod_deploys_with_bash_and_only_non_destructive_verification() -> None:
     assert "JIRA_MUTATION_ENABLED=false" in text
 
 
+def test_prod_smoke_targets_the_production_ingress_host() -> None:
+    text = _text("promote-prod.yml")
+    assert "PROD_INGRESS_HOST: ${{ vars.PROD_INGRESS_HOST }}" in text
+    assert '--header "Host: $PROD_INGRESS_HOST"' in text
+    assert '"$PROD_AGENT_API_BASE_URL/health"' in text
+
+
 def test_terraform_grants_environment_scoped_release_permissions() -> None:
     text = (ROOT / "infra" / "terraform" / "environment" / "deployment.tf").read_text()
     assert 'for_each = toset(["dev", "prod"])' in text
