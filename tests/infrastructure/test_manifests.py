@@ -131,7 +131,7 @@ def test_environment_overlays_use_terraform_secret_names() -> None:
             assert f"workforce-risk/{environment}/{secret}" in rendered
 
 
-def test_overlays_are_isolated_and_use_separate_jira_scopes() -> None:
+def test_overlays_are_isolated_and_use_the_same_validated_jira_scope() -> None:
     dev = _documents(K8S / "overlays" / "dev" / "environment.yaml")
     prod = _documents(K8S / "overlays" / "prod" / "environment.yaml")
     dev_config = next(doc for doc in dev if doc["kind"] == "ConfigMap")
@@ -139,13 +139,26 @@ def test_overlays_are_isolated_and_use_separate_jira_scopes() -> None:
     assert dev_config["metadata"]["namespace"] == "dev"
     assert prod_config["metadata"]["namespace"] == "prod"
     assert dev_config["data"]["JIRA_PROJECT_KEY"] == "WRD"
-    assert prod_config["data"]["JIRA_PROJECT_KEY"] == "WORKFORCE-PROD"
-    assert prod_config["data"]["JIRA_MUTATION_ENABLED"] == "false"
-    assert dev_config["data"]["REPORT_BUCKET"] != prod_config["data"]["REPORT_BUCKET"]
     assert (
-        dev_config["data"]["NOTIFICATION_QUEUE"]
-        != prod_config["data"]["NOTIFICATION_QUEUE"]
+        prod_config["data"]["JIRA_PROJECT_KEY"]
+        == dev_config["data"]["JIRA_PROJECT_KEY"]
     )
+    assert prod_config["data"]["JIRA_MUTATION_ENABLED"] == "false"
+    assert dev_config["data"]["REPORT_BUCKET"] == "WORKFORCE_REPORT_BUCKET"
+    assert prod_config["data"]["REPORT_BUCKET"] == "WORKFORCE_REPORT_BUCKET"
+    assert dev_config["data"]["NOTIFICATION_QUEUE"] == (
+        "WORKFORCE_NOTIFICATION_QUEUE_URL"
+    )
+    assert prod_config["data"]["NOTIFICATION_QUEUE"] == (
+        "WORKFORCE_NOTIFICATION_QUEUE_URL"
+    )
+
+    dev_workflow = (ROOT / ".github" / "workflows" / "deploy-dev.yml").read_text()
+    prod_workflow = (ROOT / ".github" / "workflows" / "promote-prod.yml").read_text()
+    assert "DEV_REPORT_BUCKET" in dev_workflow
+    assert "DEV_NOTIFICATION_QUEUE_URL" in dev_workflow
+    assert "PROD_REPORT_BUCKET" in prod_workflow
+    assert "PROD_NOTIFICATION_QUEUE_URL" in prod_workflow
 
 
 def test_dev_ingress_accepts_the_aws_load_balancer_hostname() -> None:
