@@ -1,0 +1,2 @@
+Explain only candidates and simulations returned by Workforce Risk MCP. Never
+invent a candidate or create, approve, or execute proposal state.

@@ -89,8 +89,10 @@ MVP success means:
 - An approved Jira reassignment is executed and verified.
 - No unverified write is reported as successful.
 - Zero approvals occur without valid authorization.
-- Interactive analysis remains available when a scan, email, or Bedrock call
-  fails and the approved degraded-mode rules permit it.
+- Interactive evidence gathering remains available when scans or email fail.
+  Chat succeeds only when Bedrock generates a grounded answer. Retryable
+  Bedrock failures keep the browser turn pending and retrying until Bedrock
+  succeeds or the manager cancels or leaves the page.
 - Protected characteristics are never used, and chat text is never approval.
 - Comment-derived statements are attributed and labeled unverified; personal
   reasons never become scoring factors or workforce-profile facts.
@@ -230,9 +232,13 @@ The Agent API hosts a genuine LangGraph multi-agent workflow composed of five
 bounded agents:
 
 - **Supervisor Agent:** receives an already authenticated and authorized
-  context from the Agent API, classifies the supported intent, selects one or
-  more specialist agents, enforces workflow and tool-call limits, combines
-  validated results, and returns the final typed response. It does not perform
+  context from the Agent API, resolves structured conversational references,
+  invokes the Bedrock evidence-category planner, dispatches only allowlisted
+  read collectors/specialists, enforces workflow and tool-call limits, combines
+  their results into the Universal Evidence Bundle, and invokes Bedrock for the
+  final answer. A fixed intent label may be recorded only as a telemetry or
+  optimization hint and never controls whether a question is supported or the
+  only allowed execution path. It does not perform
   authentication, primary authorization, domain scoring, or proposal-state
   construction.
 - **Workforce Analysis Agent:** investigates employee workload, capacity,
@@ -340,9 +346,8 @@ production scope.
 
 Jira Cloud contains isolated synthetic scopes:
 
-- A configured development project: either adopt the temporary `WRD`
-  proof-of-concept project or create `WORKFORCE-DEV`, repeat the required MCP
-  smoke tests, and then use it for development, integration tests, seeding,
+- The already validated `WRD` project is the sole configured synthetic
+  development scope for integration tests, seeding, scenario progression,
   cleanup, and the live mutation demo.
 - `WORKFORCE-PROD` for production-scoped read-only validation and synthetic
   production-shaped data.
@@ -354,22 +359,24 @@ development project key, and always reject `WORKFORCE-PROD`.
 Production smoke tests are read-only.
 
 The seeded development team contains seven synthetic workforce profiles,
-identified as `EMP-001` through `EMP-007`, in PostgreSQL. Jira tasks use a
-configured `Workforce Employee ID` custom field to associate work with those
-profiles. Profiles contain only approved work-planning data such as role,
+identified as `EMP-001` through `EMP-007`, in PostgreSQL. Synthetic Jira tasks
+use exactly one structured label in the form `workforce-employee:EMP-00N` to
+associate work with those profiles; seed validation rejects missing, malformed,
+or multiple workforce labels. Profiles contain only approved work-planning data such as role,
 seniority, documented skills/proficiency, capacity, allocation, mentoring
 availability, and optional Jira account mapping.
 
 Seven synthetic profiles do not require seven Atlassian accounts. Two real,
 synthetic Jira development accounts are retained for the controlled assignee
 mutation proof: the expected current assignee and approved target assignee.
-General risk analysis uses `Workforce Employee ID`; the live external-write
+General risk analysis uses the structured workforce label; the live external-write
 demonstration updates Jira's real `assignee` field only between those two test
 accounts and verifies the returned `accountId`.
 
 The versioned dev seed/reset workflow automatically prepares profiles, tasks,
 estimates, remaining estimates, deadlines, priorities, required skills,
-difficulty, dependencies, blockers, structured custom fields, safe comment
+difficulty, dependencies, blockers, the structured workforce label, configured
+custom fields such as `Blocker Category`, safe comment
 fixtures, workload distribution, similar-task fixtures, and suitable/unsuitable
 reassignment candidates. Seed operations are idempotent and scenario-tagged;
 cleanup deletes only records owned by that scenario and refuses production.
@@ -378,7 +385,7 @@ The scenario simulator is external test tooling, not a deployed application
 service. No simulator pod, Job, CronJob, service, or `simulation` namespace is
 created. Versioned Python scripts run from a developer workstation or the
 dedicated GitHub Actions scenario workflow and update only the configured
-`WORKFORCE-SIM` Jira project through guarded official Jira APIs. They can seed,
+`WRD` Jira project through guarded official Jira APIs. They can seed,
 reset, advance deterministic scenario steps, verify the resulting Jira state,
 trigger an authenticated dev scan, and compare agent results with the expected
 fixture outcomes.
@@ -387,7 +394,7 @@ The simulator and agent never communicate directly. The simulator changes Jira;
 the Agent API deployed in `dev` observes those changes through real Atlassian
 Rovo MCP calls. Simulator credentials have no access to `WORKFORCE-PROD`, AWS
 production resources, or the Kubernetes API. The simulator refuses every Jira
-scope other than `WORKFORCE-SIM` and cannot be invoked by LangGraph.
+scope other than `WRD` and cannot be invoked by LangGraph.
 The `dev` and `prod` namespaces therefore represent candidate and approved
 versions of the agent stack, while environment-specific configuration, data,
 credentials, and Jira scopes remain isolated.
@@ -582,10 +589,12 @@ the temporary synthetic `WRD` proof-of-concept project:
 
 The specification intentionally omits personal email addresses and full Jira
 account IDs. This proof of concept is complete, not a pending implementation
-assumption. Before implementation, the project must either adopt `WRD` as the
-configured development Jira scope or create `WORKFORCE-DEV` and repeat the MCP
-discovery, structured-field, custom-field, account-resolution, assignee-update,
-and read-back smoke tests there.
+assumption. `WRD` is the selected configured development Jira scope. A
+replacement project may be created only if a verified Jira limitation makes
+`WRD` unusable; before it becomes a mutation scope, the replacement must pass
+the same MCP discovery, structured-field, custom-field, account-resolution,
+assignee-update, and read-back smoke tests and replace `WRD` in the reviewed
+allowlist and guards.
 
 ### 8.3 Evidence boundaries and delay explanations
 
@@ -955,21 +964,18 @@ return the existing run.
 
 Contextual chat accepts a bounded reference: alert, employee, project, risk
 result, or proposal ID. The browser does not send full evidence bundles or
-hidden context. Conversation memory stores references rather than duplicated
-sensitive evidence or prompts.
+hidden context. Conversation memory stores structured singular and plural
+references rather than duplicated sensitive evidence or prompts. It resolves
+`this risk`, `that task`, `those tasks`, `that employee`, `them`, and `it`
+without question-specific follow-up rules. Ambiguous references produce a
+clarification question rather than a guessed entity.
 
-Supported intents are an explicit allowlist:
-
-- Explain project risk.
-- Explain employee overload.
-- Evaluate task fit.
-- Explain risk development and recurrence prevention.
-- Request reassignment candidates.
-- Run a what-if simulation.
-- Provide read-only operational diagnosis.
-
-Unsupported requests receive a capability response. The graph cannot improvise
-new actions.
+Normal chat is not constrained by a supported-intent whitelist. Known intents
+may be recorded for telemetry, analytics, observability, and optional collector
+optimization only. Unknown and previously unseen work-related questions follow
+the general evidence-category planning path. The allowlist applies to read-only
+collectors and tools, not to manager phrasing. Write requests remain outside
+chat and cannot be improvised by the graph.
 
 ### 11.3 Simulation and proposal
 
@@ -1090,26 +1096,88 @@ only after authorization and reference one exact object version.
 
 Amazon Bedrock is accessed through a provider-neutral adapter using
 least-privilege IAM. Model access and regional availability must be validated
-early. Bedrock is used only for explanations, root-cause summaries,
-recommendations, preventive guidance, and follow-up answers.
+early. Bedrock generates every successful user-visible chat answer, including
+factual Jira answers, explanations, recommendations, follow-ups, clarification
+requests, and project-boundary refusals. Deterministic code calculates scores,
+normalizes and filters evidence, resolves references, selects tools, and
+enforces grounding and safety; it never generates the final chat prose.
 
 ```text
 Receive verified context
-  -> classify supported intent
-  -> load snapshot or targeted refresh
-  -> call typed Workforce Risk MCP tools
-  -> validate evidence and confidence
-  -> Bedrock explanation or deterministic fallback
-  -> validate citations and immutable scores
-  -> return typed response
+  -> resolve structured conversational references
+  -> ask Bedrock for a small validated EvidencePlan
+  -> execute mapped allowlisted read-only collectors
+  -> build a validated, minimized UniversalEvidenceBundle
+  -> perform deterministic calculations or ranking where required
+  -> invoke Bedrock for the final plain-text answer
+  -> validate grounding, completeness, entity claims, and immutable results
+  -> return Bedrock text plus internal response metadata
 ```
+
+`EvidencePlan` contains only `scope` (`project`, `employee`, `task`, or
+`mixed`), typed entity references, unique evidence categories, and an
+`exhaustive` flag. Evidence categories are `jira_issues`,
+`workforce_profiles`, `capacity_and_workload`, `skills_and_seniority`,
+`risk_results`, `dependencies_and_blockers`, `deadlines`, `history`, and
+`operations`. Unknown fields and categories fail schema validation. The planner
+selects categories, never tool names; application code maps categories to a
+fixed read-only collector registry. The generalized chat graph has no access to
+Jira mutation tools.
+
+The optional-safe `UniversalEvidenceBundle` distinguishes configured capacity,
+workload, available capacity, capacity headroom, utilization, employee workload
+classification, task delivery risk, skills, seniority, dependencies, deadlines,
+risk results, history, comment metadata, missing data, and source metadata.
+Capacity is calculated as:
+
+```text
+capacity_headroom_hours = configured_capacity_hours - workload_hours
+available_capacity_hours = max(capacity_headroom_hours, 0)
+utilization_percent = workload_hours / configured_capacity_hours * 100
+```
+
+Thus 24 configured hours and 36 workload hours produce 0 available hours, -12
+headroom hours, and 150% utilization. Missing or non-positive configured
+capacity produces insufficient data, never a guessed calculation.
+
+Unavailable evidence is represented as typed `missing_data` containing the
+category, reason, entity, and whether it is required for the requested claim.
+Missing employee ID, estimate, skills, history, candidate, optional collector,
+or ambiguous reference is not an infrastructure exception. It limits the
+affected conclusion and Bedrock explains that more information is needed.
+Project-wide questions never require an employee ID.
 
 MCP outputs include schema version, environment, evidence timestamp,
 correlation ID, and success/error status. The graph validates every response.
-Bedrock output follows a schema containing summary, causes, recommendations,
-prevention, uncertainty, and cited evidence IDs. Responses are rejected if they
-change scores, cite unknown evidence, invent candidates, contain prohibited
-fields, or fail schema validation.
+Internal routing, tool inputs, evidence bundles, scoring, and proposal steps use
+typed schemas. Final chat generation uses plain text rather than complex JSON.
+A generic post-generation guard checks claims dynamically against the bundle
+and rejects unsupported Jira keys, summaries, assignments, statuses, priorities,
+deadlines, estimates, blockers, employee facts, capacity/risk calculations,
+dependencies, skills, and candidate rankings. It does not depend on a fixed
+intent name. For exhaustive requests, completeness validation compares the
+answer with all matching bundle records; it never hard-codes project issue keys.
+Successful chat records `response_source = "bedrock"`,
+`bedrock_invoked = true`, and `bedrock_success = true`.
+
+Known intent classification is non-authoritative telemetry or an optional
+optimization hint, not a capability whitelist or execution-path controller.
+Every normal chat request uses the evidence-planning flow. If no relevant
+evidence exists, Bedrock is told explicitly and answers that the information is
+unavailable. Unrelated questions receive a Bedrock-generated explanation of the
+project-assistant boundary.
+
+Conversation state stores bounded structured references to the last issues,
+employees, risks, evidence bundle, and relevant messages. Unambiguous
+references are resolved before gathering evidence. Ambiguous references are
+sent as alternatives so Bedrock asks for clarification instead of guessing.
+
+Reassignment candidate questions cause the plan to gather the overloaded
+employee's tasks, candidate workforce profiles, capacity/workload, skills,
+seniority, and task-required skills. Deterministic code filters and ranks
+candidates; Bedrock explains only those results. Incomplete required evidence
+produces an insufficient-information answer rather than an invented candidate
+or a 503.
 
 The system prompt requires the agent to:
 
@@ -1134,10 +1202,32 @@ fields, separate from system instructions. An allowlist minimizes data before
 Bedrock use, removing unnecessary names and emails, unrelated comments,
 attachments, token-bearing URLs, secrets, and credential-bearing stack traces.
 
-Each workflow has a maximum tool-call count, graph-step count, and deadline.
-Bedrock uses timeouts, bounded retry budgets, environment-specific circuit
-breakers, structured validation, and a deterministic explanation fallback.
+Each server-side workflow attempt has a maximum tool-call count, graph-step
+count, and deadline. Bedrock and read-only MCP calls use per-attempt timeouts,
+at most two additional transient retries, exponential backoff with jitter, and
+environment-specific circuit breakers. Authentication, authorization,
+validation, grounding, malformed evidence, and programming errors are not
+retried blindly. Optional collector/data absence is returned as missing data.
+There is no deterministic chat-text fallback. After a server-side retry budget
+is exhausted by a retryable Bedrock timeout, throttling response, temporary 5xx,
+or open circuit, the browser keeps the same chat turn pending, displays
+`Bedrock is still working...`, and resubmits it with capped exponential backoff
+and jitter until Bedrock succeeds or the manager cancels, changes project,
+clears the chat, closes, or leaves the page. The UI does not render a
+temporary-unavailable assistant answer for these transient failures. A stable
+client request ID prevents duplicate retry loops; each API attempt still has a
+correlation ID for diagnosis.
 Generic graph retry logic never retries a Jira mutation.
+
+Each chat request uses one correlation ID across request receipt, conversation
+and project context, detected evidence needs, selected MCP tools and safe
+arguments, tool start/duration/outcome/error, Bedrock model/start/duration/
+outcome/AWS request ID/token usage/stop reason/error, response parsing,
+grounding validation, and final HTTP status. Unexpected exceptions include a
+server-side stack trace; the browser receives only a safe error and correlation
+ID. Failures are classified separately for Jira timeout/auth/rate limit,
+Bedrock timeout/throttling/model service, output parsing, LangGraph state,
+reference resolution, grounding validation, and internal exceptions.
 
 ### 13.1 System-prompt contract
 
@@ -1215,22 +1305,26 @@ The governing rule is: **read degraded; write closed**.
 |---|---|
 | PostgreSQL unavailable | No proposals, approvals, audit-dependent operations, or writes; eligible read analysis is explicitly unpersisted/degraded |
 | Jira MCP/REST unavailable, rate-limited, unauthorized, or stale | Timestamped cached snapshots only; no current claim, proposal, approval, or write |
-| Bedrock unavailable/invalid | Deterministic explanation fallback; scores remain available |
+| Bedrock timeout, throttling, temporary 5xx, or open circuit | Each API attempt remains bounded; the browser keeps the turn pending and automatically retries with capped backoff until a grounded Bedrock answer succeeds or the manager cancels/leaves |
+| Bedrock invalid output, grounding failure, IAM denial, invalid configuration, or programming error | Fail safely with an actionable nonretryable error and correlation ID; never fabricate or substitute deterministic chat prose |
 | S3 unavailable | Report remains pending/failed and retries idempotently |
 | SQS/SES unavailable | In-app alert and outbox remain; bounded retries and DLQ |
 | MCP timeout/malformed output | Reject invalid evidence; typed partial/degraded response only when confidence permits |
 | Ambiguous write | Mark uncertain, notify manager/operator, and reconcile |
 | Authentication uncertainty | Reject protected operation |
 
-Retries use exponential backoff, jitter, operation-specific budgets, and total
-workflow deadlines. Circuit breakers are environment- and dependency-specific.
-Retries must not cause storms. User errors expose safe codes and correlation
-IDs; protected logs contain detailed diagnostics.
+Server-side retries use exponential backoff, jitter, operation-specific budgets,
+and workflow deadlines. Browser persistence uses capped exponential backoff,
+jitter, a single retry loop per turn, and cancellation on a new question,
+Clear, project change, page departure, or explicit manager cancellation.
+Circuit breakers are environment- and dependency-specific. Retries must not
+cause storms. User errors expose safe codes and correlation IDs; protected logs
+contain detailed diagnostics.
 
 These controls are mandatory agent-quality requirements: bounded retries,
 exponential backoff with jitter, explicit timeouts, workflow deadlines,
 tool-call limits, graph-step limits, dependency-specific circuit breakers,
-graceful termination, deterministic Bedrock fallback, typed safe user-facing
+graceful termination, Bedrock-only successful chat, typed safe user-facing
 errors, correlation IDs, idempotency, stale-data detection, and ambiguous-write
 handling. Startup, liveness, and readiness behavior follows Section 17.3. The
 governing behavior remains `read degraded; write closed`. Generic or automatic
@@ -1443,8 +1537,9 @@ Health has three levels:
 - Workflow health: scans, simulations, notifications, approvals, and
   reconciliation complete correctly.
 
-Bedrock failure alone does not make deterministic endpoints unready when the
-fallback is safe.
+Bedrock failure does not make deterministic scoring, dashboard, reporting, or
+write-safety endpoints unready. Chat workflow health reports pending retry age,
+attempt count, transient failure class, eventual success, and cancellation.
 
 Metrics cover API, LangGraph, Bedrock, MCP, scoring, scans, proposals, alerts,
 outbox/SQS, Jira MCP/REST, RDS, S3, nodes, control plane, pods, CronJobs,
@@ -1511,9 +1606,15 @@ Tests cover:
   expiration, revocation, role, environment, Jira-project scope, rotation, and
   raw-key exclusion from every storage, telemetry, prompt, MCP, audit, error,
   and browser-diagnostic boundary.
-- LangGraph routing, unsupported intent, malformed MCP/Bedrock output, unknown
-  citations, changed scores, invented candidates, prompt injection, timeouts,
-  circuits, limits, fallback, and chat-based approval attempts.
+- LangGraph evidence-category planning for known and previously unseen
+  phrasings, malformed plans/MCP evidence, unavailable optional collectors,
+  project-wide insufficient-data and candidate questions, unsupported claims,
+  changed scores, invented candidates, prompt injection, timeouts, circuits,
+  limits, persistent transient Bedrock retries, cancellation, and chat-based
+  approval attempts. Every
+  successful chat test asserts Bedrock invocation and success. At least twenty
+  unseen phrasings and multi-turn singular, plural, and ambiguous references
+  must pass without adding phrase-specific source code.
 - All twelve Section 8.4 analyses, including dependency traversal bounds,
   deadline shortfall, review concentration, estimate/scope history, and
   reassignment that transfers overload.
@@ -1598,7 +1699,8 @@ Deterministic fixtures include:
 
 ### 20.3 Optional and controlled tests
 
-- Live Bedrock is an optional authenticated smoke test.
+- Mocked Bedrock is mandatory for automated chat tests. Live Bedrock remains
+  optional in PRs and is required in dev deployment validation.
 - Failure injection and destructive exercises run only in dev.
 - Performance tests cover realistic-workspace scoring, scan duration,
   interactive latency, concurrent simulations, and backlog processing.
@@ -1631,7 +1733,7 @@ The demo:
 2. Runs or displays the daily scan.
 3. Detects overload or task-skill mismatch.
 4. Opens the alert and JSON report.
-5. Separates deterministic score from Bedrock explanation.
+5. Separates deterministic scoring/evidence from the Bedrock-generated answer.
 6. Uses contextual chat.
 7. Simulates candidate reassignment.
 8. Demonstrates that chat cannot approve.
@@ -1641,20 +1743,23 @@ The demo:
 11. Shows the audit chain, metrics, logs, and trace.
 
 A separately resettable backup scenario safely demonstrates stale-proposal
-rejection, Bedrock fallback, or uncertain-state visibility.
+rejection, graceful Bedrock unavailability, or uncertain-state visibility.
 
 The readiness checklist verifies:
 
 - The configured Jira development project and synthetic test users are seeded.
 - Custom services are healthy.
 - The dev manager API key authenticates the lightweight UI and protected API.
-- Bedrock access works or fallback is ready.
+- Bedrock grounded plain-text chat works, and a rehearsed transient timeout is
+  retried automatically until the grounded answer appears without manager
+  resubmission.
 - Jira MCP read and assignee write are tested.
 - A report artifact is available.
 - Email delivery is tested.
 - Dashboards contain data.
 - CI/CD is green.
-- A safe fallback scenario is prepared.
+- A transient Bedrock-failure scenario is prepared to demonstrate automatic
+  waiting, retry, cancellation, and eventual success.
 
 No demonstration mutation uses production data.
 
@@ -1667,15 +1772,16 @@ No demonstration mutation uses production data.
 | 0.3 | Planning | Specification, plan, validation, and test-first implementation gates | Sections 1, 22, and 23 | Approval and validation records | Branch and gate checks | Mandatory | Pending validation |
 | 1.1 | Agent design | Real overload, task-fit, blocker, dependency, deadline, concentration, and delivery-risk problem | Sections 2–3 | Seeded business workflow | Scenario acceptance tests | MVP | Explicitly covered |
 | 1.2 | Agent design | Deterministic, reproducible, evidence-based measurable value | Sections 3, 9, and 19 | Versioned scoring and SLOs | Scoring, latency, scan, deduplication, and write-safety tests | MVP | Requires implementation |
-| 1.3 | Agent design | Directly coded LangGraph and provider-neutral Bedrock adapter; no no-code platform | Sections 6.2 and 13 | Graph source and adapter | Graph and fallback unit tests | MVP | Requires implementation |
-| 1.4 | Multi-agent | Selected five-agent extra-credit topology receives pre-authenticated context; agents never receive raw API keys | Section 6.2.1 | Named graphs, typed principal context, prompts, schemas, handoffs, and deterministic degraded fallback | Pre-graph authentication, raw-key exclusion, routing, specialist-unavailable fallback, isolation, handoff, and authority tests | Extra credit selected | Requires implementation |
+| 1.3 | Agent design | Directly coded LangGraph and provider-neutral Bedrock adapter; every successful chat answer is Bedrock-generated | Sections 6.2 and 13 | Graph, canonical evidence bundle, and adapter | Known/free-form routing, grounding, retries, and Bedrock-invocation assertions | MVP | Requires implementation |
+| 1.4 | Multi-agent | Selected five-agent extra-credit topology receives pre-authenticated context; agents never receive raw API keys | Section 6.2.1 | Named graphs, typed principal context, prompts, schemas, and handoffs | Pre-graph authentication, raw-key exclusion, free-form routing, isolation, handoff, and authority tests | Extra credit selected | Requires implementation |
 | 1.5 | Agent design | Versioned authenticated HTTP API and OpenAPI contract | Section 16 | API implementation and generated OpenAPI | API contract and authorization tests | MVP | Requires implementation |
 | 1.6 | User experience | Accessible FastAPI-served lightweight manager UI with plain-language chat, context selection, reports, simulation, structured approval, and status | Sections 6.1 and 21 | Agent API static assets and demo | Browser, packaging, and accessibility tests | MVP | Requires implementation |
-| 1.7 | Agent quality | Retries, backoff/jitter, timeouts, limits, circuits, graceful termination, fallback, typed errors, and correlation | Sections 13 and 15 | Resilience policies and error schemas | Failure-injection and shutdown tests | MVP | Requires implementation |
+| 1.7 | Agent quality | Bounded server attempts, persistent cancellable browser retries for transient Bedrock failures, backoff/jitter, timeouts, limits, circuits, graceful termination, Bedrock-only chat success, typed errors, and correlation | Sections 13 and 15 | Resilience policies, lifecycle diagnostics, pending-turn UI, and error schemas | MCP/Bedrock failure injection, eventual success, cancellation, nonretryable failure, and shutdown tests | MVP | Requires implementation |
 | 1.8 | Agent safety | `read degraded; write closed`, freshness, idempotency, and no ambiguous mutation retry | Sections 10, 11.4, and 15 | Workflow guards and saga state | Stale, duplicate, outage, and crash-after-write tests | MVP | Requires implementation |
 | 1.9 | System prompt | Persona, evidence, privacy, injection, tools, refusal, approval, and write boundaries | Section 13.1 | Versioned prompt | Prompt-policy adversarial tests | Mandatory / MVP | Requires implementation |
 | 1.10 | Workforce analysis | Twelve deterministic findings feed three score families; simulations compare those families before/after | Sections 8.4 and 9 | Typed Workforce Risk MCP analysis operations and three scoring families | Seeded findings, factor routing, non-duplication, and before/after simulation tests | MVP | Requires implementation |
 | 1.11 | Comment evidence | Author-independent categories, validated attribution, deterministic pattern extraction, immutable lifecycle metadata, privacy-minimized reporting, and separate work-impact analysis | Sections 8.3, 8.5, 13, and 14 | Normalized category/provenance schema, Jira references, freshness/attribution states, and policy controls | Source-to-category mapping, author-type, edited/deleted, freshness, ambiguity, sickness-visibility, retention, corroboration, and no-scoring-effect tests | Security/Hardening | Requires implementation |
+| 1.12 | Conversational answers | Every successful chat turn uses a validated EvidencePlan, optional-safe UniversalEvidenceBundle, generic reference resolution/grounding/completeness, and Bedrock-generated plain text; fixed intents cannot control capability or the sole path | Section 13 | Evidence schemas, allowlisted collector registry, structured reference memory, deterministic derivation, generic grounding guard, and response-source metadata | Twenty unseen phrasings, multi-turn references, candidate ranking, project-wide insufficient data, capacity semantics, collector gaps, MCP/Bedrock retries, and `bedrock_invoked` assertions | Mandatory / MVP | Requires implementation |
 | 2.1 | MCP | MCP is the tool protocol; services remain tools, not agents | Section 6.6 | Client/server inventory | Architecture and allowlist tests | MVP | Explicitly covered |
 | 2.2 | Jira MCP | Official Atlassian Rovo MCP discovery, read, fields, users, write, and verification | Sections 6.4 and 8.2 | Completed POC plus deployed adapter | Dev Jira smoke and integration tests | MVP | POC validated |
 | 2.3 | Jira fallback | REST only after a proven essential MCP gap | Sections 6.4, 18, and 20.1 | Adapter only if justified | Fallback tests only if implemented; otherwise MCP-only bypass tests | MVP | Pending validation |
@@ -1689,7 +1795,7 @@ No demonstration mutation uses production data.
 | 3.5 | AWS services | RDS, S3, SQS/DLQ, SES, Secrets Manager, ECR, SSM, and Bedrock; Cognito is excluded | Sections 5, 12, 14, and 17 | Terraform-managed services | Service integration and IAM tests | Infrastructure | Requires implementation |
 | 3.6 | IaC | Terraform owns all project AWS resources; no manual AWS Console creation | Section 17.1 | Remote state, plans, and applies | Terraform validation and security tests | Infrastructure | Requires implementation |
 | 3.7 | Jira automation | Initial Atlassian consent may be documented; seven-profile synthetic data, repeatable Jira setup, validation, seeding, reset, and cleanup are scripted/API-driven; REST use is dev-administrative only | Sections 6.4, 17.1, and 23.1 | Versioned automation scripts, two synthetic Jira test accounts, and consent runbook | Dataset completeness, idempotency, ownership-tag, permission, and prod-refusal tests | Infrastructure | Selected / requires implementation |
-| 3.8 | External simulator | Scenario progression runs only from versioned workstation/GitHub Actions tooling against `WORKFORCE-SIM`; no simulator workload or namespace exists in Kubernetes | Sections 6.4, 18, and 21 | `run-scenario.yml`, advance/evaluate scripts, expected-outcome fixtures, and scope guards | Step idempotency, real-MCP observation, result comparison, Kubernetes-absence, and production-refusal tests | Testing infrastructure | Selected / requires implementation |
+| 3.8 | External simulator | Scenario progression runs only from versioned workstation/GitHub Actions tooling against the guarded `WRD` synthetic project; no simulator workload or namespace exists in Kubernetes | Sections 6.4, 18, and 21 | `run-scenario.yml`, advance/evaluate scripts, expected-outcome fixtures, and exact `WRD` scope guards | Step idempotency, real-MCP observation, result comparison, Kubernetes-absence, and production-refusal tests | Testing infrastructure | Selected / requires implementation |
 | 4.1 | CI/CD | Required PR checks, environment concurrency, and immutable digest promotion | Section 18 | GitHub Actions workflows | Workflow and deployment rehearsals | Infrastructure | Requires implementation |
 | 4.2 | CI reporting | Actions summaries, JUnit, Codecov/equivalent, and retained diagnostic/security/deployment artifacts | Sections 18 and 20 | CI summaries and artifacts | Failed-run artifact inspection | Infrastructure | Requires implementation |
 | 4.3 | Deployment | GitHub Actions plus Helm/manifests is the MVP path | Section 18 | Dev deployment and protected prod promotion | Smoke and rollback rehearsals | Infrastructure | Requires implementation |
@@ -1703,10 +1809,10 @@ No demonstration mutation uses production data.
 | 6.3 | Testing | Persistence, AWS emulation, Jira dev integration, and transport failures | Section 20.1 | Integration environments | Success and failure reports | Mandatory | Requires implementation |
 | 6.4 | Testing | Seeded end-to-end detection through verified reassignment | Sections 20.2 and 21 | Resettable dev scenario | End-to-end report and audit chain | Mandatory | Requires implementation |
 | 6.5 | Testing | Performance, accessibility, infrastructure, and controlled dev failure tests | Section 20.3 | Test suites and retained reports | CI/dev evidence | Security/Hardening | Requires implementation |
-| 7.1 | Validation | Bedrock regional model access and IAM | Sections 13 and 23.2 | Regional smoke record | Optional live smoke plus fallback test | Technical validation | Pending validation |
+| 7.1 | Validation | Bedrock regional access, IAM, grounded plain-text generation, bounded server attempts, persistent transient retry, cancellation, and eventual success | Sections 13 and 23.2 | Regional smoke record | Optional PR smoke, required dev smoke, and mocked retry/cancellation tests | Technical validation | Pending validation |
 | 7.2 | Validation | Pinned Kubernetes/add-on versions and compatibility | Sections 17.2 and 23.2 | Version matrix | Install, skew, and manifest validation | Technical validation | Pending validation |
 | 7.3 | Validation | Production-shaped HPA tuning and scaling acceptance before production | Sections 22 and 23.3 | Approved HPA measurement report | Load, scale-out, stabilization, scale-down, latency, and error tests | Pre-production validation | Pending validation |
-| 7.4 | Demonstration | Deterministic resettable dev demo with one correlation chain | Section 21 | Demo readiness evidence | Primary and fallback rehearsals | MVP | Requires implementation |
+| 7.4 | Demonstration | Resettable dev evidence with Bedrock-generated chat and one correlation chain | Section 21 | Demo readiness evidence | Primary and transient Bedrock retry/eventual-success rehearsals | MVP | Requires implementation |
 | 8.1 | Agent Skills | Workforce risk triage skill | Section 24.1 | `skills/workforce-risk-triage/SKILL.md` | Trigger, refusal, and output tests | Extra credit | Requires implementation |
 | 8.2 | Agent Skills | Deploy and verify environment skill | Section 24.2 | `skills/deploy-and-verify-environment/SKILL.md` | Gate, failure, and verification tests | Extra credit | Requires implementation |
 | 8.3 | Agent Skills | Safe Jira reassignment demo skill | Section 24.3 | `skills/safe-jira-reassignment-demo/SKILL.md` | Dev-scope, approval, uncertainty, and cleanup tests | Extra credit | Requires implementation |
@@ -1762,8 +1868,8 @@ decisions and identifies the validations or choices that remain open.
 9. **Selected:** application-managed role/environment/project-scoped API keys
    replace Cognito for the MVP. A production identity provider remains a future
    hardening path if real organizational users are introduced.
-10. **Selected:** seven synthetic workforce profiles and a structured Jira
-    `Workforce Employee ID` field model the team; two real synthetic Jira
+10. **Selected:** seven synthetic workforce profiles and the structured Jira
+    label convention `workforce-employee:EMP-00N` model the team; two real synthetic Jira
     accounts are used only for the controlled assignee-mutation demonstration.
 11. **Selected:** deterministic scenario progression is external test tooling
     executed from a workstation or `run-scenario.yml`. Kubernetes retains only
@@ -1775,12 +1881,16 @@ decisions and identifies the validations or choices that remain open.
 1. Prove unattended Jira MCP authentication with a dedicated,
    narrowly permissioned integration identity, including token rotation,
    CronJob compatibility, required tools, and project-scope enforcement.
-2. Decide whether to adopt temporary project `WRD` as the configured development
-   scope or create `WORKFORCE-DEV`; if creating the latter, repeat the approved
-   MCP discovery, structured-field, custom-field, account-resolution,
-   assignee-update, and read-back smoke tests.
+2. Confirm the selected `WRD` development scope remains accessible to the
+   dedicated integration identity and matches the exact mutation, seed, and
+   cleanup allowlists. If a verified limitation requires a replacement project,
+   repeat the approved MCP discovery, structured-field, custom-field,
+   account-resolution, assignee-update, and read-back smoke tests before
+   changing those allowlists.
 3. Validate Amazon Bedrock model access and regional availability in the
-   selected AWS region, including IAM permissions and deterministic fallback.
+   selected AWS region, including IAM permissions, grounded plain-text chat,
+   bounded server attempts, persistent browser retry, cancellation, and
+   eventual success after transient failures.
 4. Select, pin, and compatibility-test Kubernetes, containerd, Calico,
    ingress, metrics-server, External Secrets Operator, Prometheus, Grafana,
    Loki, and related component versions, including supported Kubernetes
@@ -1884,7 +1994,7 @@ and constrains them but does not create their files.
   continuity, and cleanup refusal against production.
 - **Failure behavior:** Apply `read degraded; write closed`; mark ambiguous
   outcomes `uncertain`, stop automatic action, preserve evidence, and direct
-  the presenter to the prepared fallback scenario.
+  the presenter to the prepared backup scenario.
 - **Expected outputs:** Readiness checklist, deterministic score, explanation,
   simulation comparison, proposal/approval state, verified Jira result, audit
   references, cleanup result, and correlation ID.

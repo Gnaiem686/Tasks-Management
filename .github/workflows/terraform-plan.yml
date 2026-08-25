@@ -1,0 +1,85 @@
+name: Terraform plan
+
+on:
+  pull_request:
+    paths:
+      - infra/terraform/**
+      - .github/workflows/terraform-*.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-plan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    if: vars.INFRASTRUCTURE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        root: [bootstrap, shared, environment]
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+      TF_VAR_admin_cidr: ${{ vars.ADMIN_CIDR }}
+      TF_VAR_kubernetes_version: ${{ vars.KUBERNETES_VERSION }}
+      TF_VAR_kubernetes_package_version: ${{ vars.KUBERNETES_PACKAGE_VERSION }}
+      TF_VAR_containerd_version: ${{ vars.CONTAINERD_VERSION }}
+      TF_VAR_calico_version: ${{ vars.CALICO_VERSION }}
+      TF_VAR_postgres_engine_version: ${{ vars.POSTGRES_ENGINE_VERSION }}
+      TF_VAR_bedrock_model_id: ${{ vars.BEDROCK_MODEL_ID }}
+      TF_VAR_ses_identity_arn: ${{ vars.SES_IDENTITY_ARN }}
+      TF_VAR_platform_alert_email: ${{ vars.PLATFORM_ALERT_EMAIL }}
+      TF_VAR_cluster_oidc_provider_arn: ${{ vars.CLUSTER_OIDC_PROVIDER_ARN }}
+      TF_VAR_cluster_oidc_issuer_hostpath: ${{ vars.CLUSTER_OIDC_ISSUER_HOSTPATH }}
+      TF_VAR_github_repository: ${{ github.repository }}
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with: {terraform_version: "1.10.5"}
+      - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4
+        with:
+          role-to-assume: ${{ vars.TERRAFORM_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Initialize Terraform
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          root="infra/terraform/${{ matrix.root }}"
+          if [[ "${{ matrix.root }}" == "bootstrap" ]]; then
+            terraform -chdir="$root" init
+          else
+            terraform -chdir="$root" init \
+              -backend-config="bucket=${{ vars.TERRAFORM_STATE_BUCKET }}"
+          fi
+      - name: Validate and plan
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          root="infra/terraform/${{ matrix.root }}"
+          terraform -chdir="$root" fmt -check -recursive
+          terraform -chdir="$root" validate
+          terraform -chdir="$root" plan -out="$GITHUB_WORKSPACE/${{ matrix.root }}.tfplan"
+          printf '%s\n' "$GITHUB_SHA" > "${{ matrix.root }}-plan-commit.txt"
+          terraform -chdir="$root" show -no-color "$GITHUB_WORKSPACE/${{ matrix.root }}.tfplan" \
+            > "${{ matrix.root }}-plan-summary.txt"
+      - name: Upload immutable plan evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: terraform-plan-${{ matrix.root }}
+          path: |
+            ${{ matrix.root }}.tfplan
+            ${{ matrix.root }}-plan-commit.txt
+            ${{ matrix.root }}-plan-summary.txt
+          retention-days: 7
+      - name: Write plan summary
+        if: always()
+        run: echo 'Terraform plan evidence is retained for review.' >> "$GITHUB_STEP_SUMMARY"

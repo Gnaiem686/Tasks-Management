@@ -1,0 +1,10 @@
+{
+  "title": "Workforce Risk — Agent and MCP Workflows",
+  "uid": "workforce-agent-mcp",
+  "tags": ["workforce", "operations"],
+  "panels": [
+    {"id": 1, "title": "MCP request outcomes", "type": "timeseries", "targets": [{"expr": "sum by (service, outcome) (rate(workforce_mcp_requests_total[5m]))"}]},
+    {"id": 2, "title": "Bedrock outcomes", "type": "timeseries", "targets": [{"expr": "sum by (outcome) (rate(workforce_bedrock_requests_total[5m]))"}]}
+  ],
+  "schemaVersion": 39
+}

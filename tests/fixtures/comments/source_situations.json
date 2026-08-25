@@ -1,0 +1,14 @@
+[
+  {"body": "I am sick and unavailable today", "category": "temporary_unavailability_report"},
+  {"body": "I have a personal issue and will be unavailable", "category": "temporary_unavailability_report"},
+  {"body": "I will be unavailable tomorrow", "category": "temporary_unavailability_report"},
+  {"body": "I need clarification on the acceptance criteria", "category": "clarification_request"},
+  {"body": "I need technical help with this implementation", "category": "technical_help_request"},
+  {"body": "This task is blocked by WRD-8", "category": "blocker_report"},
+  {"body": "This is waiting for review", "category": "review_waiting_report"},
+  {"body": "My assigned workload exceeds my available capacity", "category": "workload_concern"},
+  {"body": "I cannot meet the current deadline", "category": "deadline_concern"},
+  {"body": "I do not have access to the repository", "category": "missing_access_report"},
+  {"body": "I am frustrated with this task", "category": "task_frustration_report"},
+  {"body": "I cannot get the required collaboration", "category": "collaboration_concern"}
+]

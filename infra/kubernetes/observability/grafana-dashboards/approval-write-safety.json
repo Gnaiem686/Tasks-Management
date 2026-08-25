@@ -1,0 +1,10 @@
+{
+  "title": "Workforce Risk — Approval and Write Safety",
+  "uid": "workforce-write-safety",
+  "tags": ["workforce", "security"],
+  "panels": [
+    {"id": 1, "title": "Proposal operations", "type": "timeseries", "targets": [{"expr": "sum by (outcome) (rate(workforce_proposal_operations_total[5m]))"}]},
+    {"id": 2, "title": "Verification outcomes", "type": "stat", "targets": [{"expr": "sum by (outcome) (increase(workforce_proposal_verifications_total[1h]))"}]}
+  ],
+  "schemaVersion": 39
+}

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Workforce Risk Manager</title>
+<link rel="stylesheet" href="/static/styles.css">
+<script src="/static/chat.js" defer></script>
+</head>
+<body data-jira-site="{{JIRA_SITE_URL}}">
+<header class="topbar">
+  <div>
+    <p class="eyebrow">Workforce delivery intelligence</p>
+    <h1>Workforce Risk Manager</h1>
+  </div>
+  <div class="project-controls">
+    <label for="project-select">Project</label>
+    <select id="project-select"></select>
+    <button id="refresh-dashboard" type="button">Refresh data</button>
+  </div>
+</header>
+<p id="page-status" class="page-status" role="status" aria-live="polite">Loading project evidence...</p>
+<div id="dashboard-shell" class="dashboard-shell">
+  <main class="dashboard" aria-label="Workforce dashboard">
+    <section id="summary-cards" class="summary-cards" aria-label="Project risk summary"></section>
+    <section class="card team-card">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">People</p>
+          <h2>Team risk overview</h2>
+        </div>
+        <div class="section-actions">
+          <span id="evidence-time"></span>
+          <button id="view-all-employees" class="secondary view-all" data-view-all="employees" type="button">View all</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table id="team-risk-table">
+          <caption>Current workload and risk by employee</caption>
+          <thead>
+            <tr><th>Employee</th><th>Risk</th><th>Workload</th><th>Tasks</th><th>Top risk</th></tr>
+          </thead>
+          <tbody id="employee-rows"></tbody>
+        </table>
+      </div>
+    </section>
+    <section id="risk-alerts" class="card alerts-card">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Attention</p>
+          <h2>Risk alerts</h2>
+        </div>
+        <button id="view-all-alerts" class="secondary view-all" data-view-all="alerts" type="button">View all</button>
+      </div>
+      <ul id="alert-list" class="alert-list"></ul>
+    </section>
+    <div class="dashboard-lower">
+      <section id="project-progress" class="card">
+        <p class="eyebrow">Delivery</p>
+        <h2>Project progress</h2>
+        <div id="progress-content"></div>
+      </section>
+      <section id="workload-distribution" class="card">
+        <p class="eyebrow">Capacity</p>
+        <h2>Workload distribution</h2>
+        <div id="workload-content"></div>
+      </section>
+    </div>
+    <section class="card task-card">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Work items</p>
+          <h2>Tasks requiring attention</h2>
+        </div>
+        <button id="view-all-tasks" class="secondary view-all" data-view-all="tasks" type="button">View all</button>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <caption>Structured Jira evidence</caption>
+          <thead>
+            <tr><th>Task</th><th>Assignee</th><th>Status</th><th>Due</th><th>Remaining</th></tr>
+          </thead>
+          <tbody id="task-rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <aside id="chat-panel" class="chat-panel" aria-labelledby="chat-title">
+    <header class="chat-header">
+      <div>
+        <p class="eyebrow">Amazon Bedrock</p>
+        <h2 id="chat-title">AI workforce assistant</h2>
+      </div>
+      <button id="clear-chat" class="secondary" type="button">Clear</button>
+    </header>
+    <div class="suggestions" aria-label="Suggested questions">
+      <button type="button" data-question="Which employees are at risk and why?">Who is at risk?</button>
+      <button type="button" data-question="Which tasks are most likely to miss their deadlines?">Deadline risks</button>
+      <button type="button" data-question="Which work is blocked right now?">Blocked work</button>
+    </div>
+    <div id="chat-messages" class="chat-messages" aria-live="polite">
+      <p class="assistant-message">Ask anything about this project's employees, tasks, deadlines, blockers, workload, or delivery risk.</p>
+    </div>
+    <form id="chat-composer" class="chat-composer">
+      <label for="manager-question">Ask about this project</label>
+      <textarea id="manager-question" maxlength="1000" rows="3" required placeholder="Why is this employee at risk?"></textarea>
+      <button type="submit">Ask agent</button>
+      <button id="cancel-chat" class="secondary" type="button" hidden>Cancel waiting</button>
+    </form>
+  </aside>
+</div>
+<dialog id="detail-drawer" class="detail-drawer" aria-labelledby="detail-title">
+  <div class="drawer-heading">
+    <h2 id="detail-title">Evidence details</h2>
+    <button id="close-detail" type="button">Close</button>
+  </div>
+  <div id="detail-content"></div>
+</dialog>
+</body>
+</html>

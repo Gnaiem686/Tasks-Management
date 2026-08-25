@@ -1,0 +1,10 @@
+{
+  "title": "Workforce Risk — Cluster and AWS Health",
+  "uid": "workforce-cluster-aws",
+  "tags": ["workforce", "infrastructure"],
+  "panels": [
+    {"id": 1, "title": "Unavailable replicas", "type": "timeseries", "targets": [{"expr": "sum by (namespace) (kube_deployment_status_replicas_unavailable)"}]},
+    {"id": 2, "title": "Notification queue delay", "type": "timeseries", "targets": [{"expr": "max by (environment) (workforce_notification_queue_delay_seconds)"}]}
+  ],
+  "schemaVersion": 39
+}

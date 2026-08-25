@@ -1,0 +1,348 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shared-config
+data:
+  WORKFORCE_MCP_URL: http://workforce-risk-mcp:8001/mcp
+  DEVOPS_MCP_URL: http://devops-mcp:8002/mcp
+  JIRA_INTEGRATION: atlassian-rovo-mcp
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: agent-api}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: workforce-risk-mcp}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: devops-mcp}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: notification-worker}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: external-secrets
+  annotations:
+    eks.amazonaws.com/role-arn: WORKFORCE_EXTERNAL_SECRETS_ROLE_ARN
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: application-secrets
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: aws-secrets-manager
+  target:
+    name: application-secrets
+    creationPolicy: Owner
+  data:
+    - secretKey: DATABASE_URL
+      remoteRef: {key: database}
+    - secretKey: API_KEY_HMAC_PEPPER
+      remoteRef: {key: api-key-pepper}
+    - secretKey: INITIAL_API_KEY
+      remoteRef: {key: initial-api-key}
+    - secretKey: ATLASSIAN_MCP_CREDENTIAL
+      remoteRef: {key: jira-mcp}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: agent-api}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: agent-api}}
+  template:
+    metadata: {labels: {app: agent-api}}
+    spec:
+      serviceAccountName: agent-api
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: agent-api
+          image: registry.invalid/workforce-risk/agent-api@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          ports: [{name: http, containerPort: 8000}]
+          envFrom:
+            - configMapRef: {name: shared-config}
+            - configMapRef: {name: environment-config}
+            - secretRef: {name: application-secrets}
+          env:
+            - name: JIRA_MCP_AUTHORIZATION
+              valueFrom:
+                secretKeyRef:
+                  name: application-secrets
+                  key: ATLASSIAN_MCP_CREDENTIAL
+            - {name: AWS_ROLE_ARN, value: WORKFORCE_APPLICATION_ROLE_ARN}
+            - {name: AWS_WEB_IDENTITY_TOKEN_FILE, value: /var/run/secrets/aws/token}
+          volumeMounts:
+            - {name: aws-web-identity, mountPath: /var/run/secrets/aws, readOnly: true}
+          startupProbe:
+            httpGet: {path: /health/startup, port: http}
+            failureThreshold: 30
+            periodSeconds: 2
+          readinessProbe:
+            httpGet: {path: /health/ready, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet: {path: /health/live, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 2
+          resources:
+            requests: {cpu: 200m, memory: 256Mi}
+            limits: {cpu: "1", memory: 768Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities: {drop: [ALL]}
+      volumes:
+        - name: aws-web-identity
+          projected:
+            sources:
+              - serviceAccountToken: {audience: sts.amazonaws.com, expirationSeconds: 3600, path: token}
+      securityContext: {seccompProfile: {type: RuntimeDefault}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: workforce-risk-mcp}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: workforce-risk-mcp}}
+  template:
+    metadata: {labels: {app: workforce-risk-mcp}}
+    spec:
+      serviceAccountName: workforce-risk-mcp
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: workforce-risk-mcp
+          image: registry.invalid/workforce-risk/workforce-risk-mcp@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          ports: [{name: mcp, containerPort: 8001}]
+          envFrom:
+            - configMapRef: {name: environment-config}
+            - secretRef: {name: application-secrets}
+          env:
+            - {name: AWS_ROLE_ARN, value: WORKFORCE_APPLICATION_ROLE_ARN}
+            - {name: AWS_WEB_IDENTITY_TOKEN_FILE, value: /var/run/secrets/aws/token}
+            - {name: WORKFORCE_MCP_HOST, value: 0.0.0.0}
+            - {name: WORKFORCE_MCP_LISTEN_PORT, value: "8001"}
+          volumeMounts:
+            - {name: aws-web-identity, mountPath: /var/run/secrets/aws, readOnly: true}
+          startupProbe: {tcpSocket: {port: mcp}, failureThreshold: 30, periodSeconds: 2}
+          readinessProbe: {tcpSocket: {port: mcp}, periodSeconds: 5}
+          livenessProbe: {tcpSocket: {port: mcp}, periodSeconds: 10}
+          resources: {requests: {cpu: 200m, memory: 256Mi}, limits: {cpu: "1", memory: 768Mi}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, runAsNonRoot: true, capabilities: {drop: [ALL]}}
+      volumes:
+        - name: aws-web-identity
+          projected:
+            sources:
+              - serviceAccountToken: {audience: sts.amazonaws.com, expirationSeconds: 3600, path: token}
+      securityContext: {seccompProfile: {type: RuntimeDefault}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: devops-mcp}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: devops-mcp}}
+  template:
+    metadata: {labels: {app: devops-mcp}}
+    spec:
+      serviceAccountName: devops-mcp
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: devops-mcp
+          image: registry.invalid/workforce-risk/devops-mcp@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          ports: [{name: mcp, containerPort: 8002}]
+          envFrom: [{configMapRef: {name: environment-config}}]
+          env:
+            - {name: DEVOPS_MCP_HOST, value: 0.0.0.0}
+            - {name: DEVOPS_MCP_LISTEN_PORT, value: "8002"}
+          startupProbe: {tcpSocket: {port: mcp}, failureThreshold: 30, periodSeconds: 2}
+          readinessProbe: {tcpSocket: {port: mcp}, periodSeconds: 5}
+          livenessProbe: {tcpSocket: {port: mcp}, periodSeconds: 10}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 384Mi}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, runAsNonRoot: true, capabilities: {drop: [ALL]}}
+      securityContext: {seccompProfile: {type: RuntimeDefault}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: notification-worker}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: notification-worker}}
+  template:
+    metadata: {labels: {app: notification-worker}}
+    spec:
+      serviceAccountName: notification-worker
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: notification-worker
+          image: registry.invalid/workforce-risk/notification-worker@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          envFrom:
+            - configMapRef: {name: environment-config}
+            - secretRef: {name: application-secrets}
+          env:
+            - {name: AWS_ROLE_ARN, value: WORKFORCE_APPLICATION_ROLE_ARN}
+            - {name: AWS_WEB_IDENTITY_TOKEN_FILE, value: /var/run/secrets/aws/token}
+          volumeMounts:
+            - {name: aws-web-identity, mountPath: /var/run/secrets/aws, readOnly: true}
+          startupProbe: {exec: {command: [sh, -c, "kill -0 1"]}, failureThreshold: 30, periodSeconds: 2}
+          readinessProbe: {exec: {command: [sh, -c, "kill -0 1"]}, periodSeconds: 5}
+          livenessProbe: {exec: {command: [sh, -c, "kill -0 1"]}, periodSeconds: 10}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 384Mi}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, runAsNonRoot: true, capabilities: {drop: [ALL]}}
+      volumes:
+        - name: aws-web-identity
+          projected:
+            sources:
+              - serviceAccountToken: {audience: sts.amazonaws.com, expirationSeconds: 3600, path: token}
+      securityContext: {seccompProfile: {type: RuntimeDefault}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-api
+  labels: {app: agent-api}
+spec:
+  selector: {app: agent-api}
+  ports: [{name: http, port: 80, targetPort: http}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: workforce-risk-mcp}
+spec:
+  selector: {app: workforce-risk-mcp}
+  ports: [{name: mcp, port: 8001, targetPort: mcp}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: devops-mcp}
+spec:
+  selector: {app: devops-mcp}
+  ports: [{name: mcp, port: 8002, targetPort: mcp}]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata: {name: agent-api}
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: workforce.example.invalid
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: {service: {name: agent-api, port: {number: 80}}}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: {name: agent-api}
+spec:
+  maxUnavailable: 1
+  selector: {matchLabels: {app: agent-api}}
+---
+apiVersion: batch/v1
+kind: Job
+metadata: {name: database-migration}
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 600
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: workforce-risk-mcp
+      containers:
+        - name: migration
+          image: registry.invalid/workforce-risk/workforce-risk-mcp@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          command:
+            - sh
+            - -c
+            - alembic upgrade head && python -m workforce_persistence.bootstrap
+          envFrom:
+            - configMapRef: {name: environment-config}
+            - secretRef: {name: application-secrets}
+          env:
+            - {name: AWS_ROLE_ARN, value: WORKFORCE_APPLICATION_ROLE_ARN}
+            - {name: AWS_WEB_IDENTITY_TOKEN_FILE, value: /var/run/secrets/aws/token}
+          volumeMounts:
+            - {name: aws-web-identity, mountPath: /var/run/secrets/aws, readOnly: true}
+          resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: 500m, memory: 512Mi}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, runAsNonRoot: true, capabilities: {drop: [ALL]}}
+      volumes:
+        - name: aws-web-identity
+          projected:
+            sources:
+              - serviceAccountToken: {audience: sts.amazonaws.com, expirationSeconds: 3600, path: token}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata: {name: daily-risk-scan}
+spec:
+  schedule: "0 6 * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 900
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 1800
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          serviceAccountName: agent-api
+          containers:
+            - name: scan
+              image: registry.invalid/workforce-risk/agent-api@sha256:0000000000000000000000000000000000000000000000000000000000000000
+              command: [python, -m, agent_api.scheduled_scan]
+              envFrom:
+                - configMapRef: {name: environment-config}
+                - secretRef: {name: application-secrets}
+              env:
+                - {name: AWS_ROLE_ARN, value: WORKFORCE_APPLICATION_ROLE_ARN}
+                - {name: AWS_WEB_IDENTITY_TOKEN_FILE, value: /var/run/secrets/aws/token}
+              volumeMounts:
+                - {name: aws-web-identity, mountPath: /var/run/secrets/aws, readOnly: true}
+              resources: {requests: {cpu: 200m, memory: 256Mi}, limits: {cpu: "1", memory: 768Mi}}
+              securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, runAsNonRoot: true, capabilities: {drop: [ALL]}}
+          volumes:
+            - name: aws-web-identity
+              projected:
+                sources:
+                  - serviceAccountToken: {audience: sts.amazonaws.com, expirationSeconds: 3600, path: token}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: default-deny}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: allow-application}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}}]
+    - from: [{podSelector: {}}]
+  egress:
+    - to: [{podSelector: {}}]
+    - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}}]
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to: [{ipBlock: {cidr: 10.40.0.0/16}}]
+      ports: [{protocol: TCP, port: 5432}]
+    - to: [{ipBlock: {cidr: 0.0.0.0/0, except: [169.254.169.254/32]}}]
+      ports: [{protocol: TCP, port: 443}]

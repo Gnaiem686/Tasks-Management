@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+exec > >(systemd-cat -t workforce-kubeadm-worker) 2>&1
+
+if test -f /etc/kubernetes/kubelet.conf; then
+  echo "Worker is already joined"
+  exit 0
+fi
+
+export DEBIAN_FRONTEND=noninteractive
+swapoff -a
+sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
+cat >/etc/modules-load.d/kubernetes.conf <<'MODULES'
+overlay
+br_netfilter
+MODULES
+modprobe overlay
+modprobe br_netfilter
+cat >/etc/sysctl.d/99-kubernetes.conf <<'SYSCTL'
+net.bridge.bridge-nf-call-iptables=1
+net.bridge.bridge-nf-call-ip6tables=1
+net.ipv4.ip_forward=1
+SYSCTL
+sysctl --system
+
+apt-get update
+apt-get install -y apt-transport-https ca-certificates curl gpg unzip
+if ! aws --version 2>&1 | grep -q "aws-cli/${aws_cli_version}"; then
+  curl -fsSLo /tmp/awscliv2.zip \
+    "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${aws_cli_version}.zip"
+  echo "${aws_cli_sha256}  /tmp/awscliv2.zip" | sha256sum -c -
+  mkdir -p /var/tmp/workforce-aws-cli-install
+  unzip -qo /tmp/awscliv2.zip -d /var/tmp/workforce-aws-cli-install
+  /var/tmp/workforce-aws-cli-install/aws/install --update
+fi
+
+install -m 0755 -d /opt/kubelet-credential-providers
+curl -fsSLo /opt/kubelet-credential-providers/ecr-credential-provider \
+  "https://storage.googleapis.com/k8s-staging-provider-aws/releases/${ecr_credential_provider_version}/linux/amd64/ecr-credential-provider-linux-amd64"
+echo "${ecr_credential_provider_sha256}  /opt/kubelet-credential-providers/ecr-credential-provider" \
+  | sha256sum -c -
+chmod 0755 /opt/kubelet-credential-providers/ecr-credential-provider
+cat >/var/lib/kubelet/credential-provider-config.yaml <<'CREDENTIAL_PROVIDER'
+apiVersion: kubelet.config.k8s.io/v1
+kind: CredentialProviderConfig
+providers:
+  - name: ecr-credential-provider
+    matchImages:
+      - "*.dkr.ecr.*.amazonaws.com"
+      - "*.dkr.ecr.*.amazonaws.com.cn"
+      - "*.dkr.ecr-fips.*.amazonaws.com"
+    defaultCacheDuration: "12h"
+    apiVersion: credentialprovider.kubelet.k8s.io/v1
+CREDENTIAL_PROVIDER
+cat >/etc/default/kubelet <<'KUBELET_ARGS'
+KUBELET_EXTRA_ARGS=--image-credential-provider-config=/var/lib/kubelet/credential-provider-config.yaml --image-credential-provider-bin-dir=/opt/kubelet-credential-providers
+KUBELET_ARGS
+
+apt-get install -y "containerd=${containerd_version}"
+mkdir -p /etc/containerd
+containerd config default >/etc/containerd/config.toml
+sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+systemctl enable --now containerd
+
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL "https://pkgs.k8s.io/core:/stable:/v${kubernetes_version}/deb/Release.key" \
+  | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${kubernetes_version}/deb/ /" \
+  >/etc/apt/sources.list.d/kubernetes.list
+apt-get update
+apt-get install -y "kubelet=${kubernetes_package_version}" "kubeadm=${kubernetes_package_version}"
+apt-mark hold kubelet kubeadm containerd
+
+MAX_JOIN_ATTEMPTS=20
+attempt=1
+sleep_seconds=10
+while (( attempt <= MAX_JOIN_ATTEMPTS )); do
+  if test -f /etc/kubernetes/kubelet.conf; then
+    echo "Worker joined during a prior attempt"
+    exit 0
+  fi
+  JOIN_COMMAND=$(aws ssm get-parameter \
+    --region "${aws_region}" \
+    --name "${join_parameter_name}" \
+    --with-decryption \
+    --query 'Parameter.Value' \
+    --output text 2>/dev/null || true)
+  if [[ "$JOIN_COMMAND" == kubeadm\ join* ]] && $JOIN_COMMAND; then
+    echo "Worker joined successfully"
+    exit 0
+  fi
+  echo "Join attempt $attempt/$MAX_JOIN_ATTEMPTS failed; retrying in $sleep_seconds seconds"
+  sleep "$sleep_seconds"
+  sleep_seconds=$(( sleep_seconds < 60 ? sleep_seconds + 10 : 60 ))
+  attempt=$((attempt + 1))
+done
+
+echo "Worker failed to join after bounded retries"
+exit 1

@@ -1,0 +1,1 @@
+"""Safe reassignment proposal domain."""

@@ -1,0 +1,88 @@
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: workforce-ebs-gp3-retain
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 10Gi
+
+alertmanager:
+  serviceAccount:
+    create: true
+    name: workforce-alertmanager
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      receiver: workforce-platform-sns
+      group_by: [environment, owner, severity]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 24h
+      routes:
+        - receiver: "null"
+          matchers:
+            - alertname=~"Watchdog|InfoInhibitor"
+    receivers:
+      - name: "null"
+      - name: workforce-platform-sns
+        sns_configs:
+          - topic_arn: WORKFORCE_PLATFORM_ALERT_TOPIC_ARN
+            sigv4:
+              region: WORKFORCE_AWS_REGION
+            subject: "[Workforce Risk] Platform health alert"
+            send_resolved: true
+    inhibit_rules:
+      - source_matchers:
+          - severity="critical"
+        target_matchers:
+          - severity="warning"
+        equal: [environment, owner]
+  alertmanagerSpec:
+    serviceAccountName: workforce-alertmanager
+    containers:
+      - name: alertmanager
+        env:
+          - name: AWS_ROLE_ARN
+            value: WORKFORCE_ALERTMANAGER_SNS_ROLE_ARN
+          - name: AWS_WEB_IDENTITY_TOKEN_FILE
+            value: /var/run/secrets/aws/token
+        volumeMounts:
+          - name: aws-web-identity
+            mountPath: /var/run/secrets/aws
+            readOnly: true
+    volumes:
+      - name: aws-web-identity
+        projected:
+          sources:
+            - serviceAccountToken:
+                audience: sts.amazonaws.com
+                expirationSeconds: 3600
+                path: token
+
+grafana:
+  sidecar:
+    datasources:
+      alertmanager:
+        enabled: false
+  grafana.ini:
+    server:
+      root_url: "%(protocol)s://%(domain)s/grafana/"
+      serve_from_sub_path: true
+    auth.anonymous:
+      enabled: true
+      org_role: Viewer
+    auth:
+      disable_login_form: true
+  persistence:
+    enabled: true
+    type: pvc
+    storageClassName: workforce-ebs-gp3-retain
+    accessModes:
+      - ReadWriteOnce
+    size: 2Gi

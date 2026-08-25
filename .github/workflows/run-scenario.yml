@@ -1,0 +1,67 @@
+name: Run synthetic workforce scenario
+
+on:
+  workflow_dispatch:
+    inputs:
+      step:
+        description: Versioned scenario step
+        required: true
+        default: primary_demo
+        type: choice
+        options:
+          - balanced
+          - overload_and_blocker
+          - weak_fit
+          - paired_fit
+          - overloaded_candidate
+          - insufficient_data
+          - stale_proposal
+          - primary_demo
+          - backup_demo
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workforce-scenario-wrd
+  cancel-in-progress: false
+
+jobs:
+  scenario:
+    runs-on: ubuntu-latest
+    environment: simulation-dev
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.3"
+          enable-cache: true
+      - name: Install locked dependencies
+        run: uv sync --frozen
+      - name: Advance WRD through guarded scenario tooling
+        env:
+          ATLASSIAN_MCP_AUTHORIZATION: ${{ secrets.ATLASSIAN_MCP_AUTHORIZATION }}
+        run: >-
+          uv run python scripts/jira/advance_scenario.py
+          --scenario tests/fixtures/scenarios/seven_employee_team.json
+          --live-mcp
+          --step "${{ inputs.step }}"
+      - name: Evaluate dev Agent result
+        env:
+          AGENT_DEV_URL: ${{ secrets.AGENT_DEV_URL }}
+          AGENT_DEV_API_KEY: ${{ secrets.AGENT_DEV_API_KEY }}
+        run: >-
+          uv run python scripts/scenario/evaluate_results.py
+          --scenario tests/fixtures/scenarios/seven_employee_team.json
+          --step "${{ inputs.step }}"
+          --agent-url "$AGENT_DEV_URL"
+          --api-key "$AGENT_DEV_API_KEY"
+      - name: Retain scenario evaluation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scenario-${{ inputs.step }}-${{ github.run_id }}
+          path: scenario-results.json
+          if-no-files-found: ignore
+          retention-days: 14

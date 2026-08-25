@@ -1,0 +1,7 @@
+{
+  "employee_id": "EMP-004",
+  "remaining_estimated_hours": 70,
+  "available_capacity_hours": 40,
+  "expected_eligibility": "rejected",
+  "expected_reason": "candidate_overloaded"
+}

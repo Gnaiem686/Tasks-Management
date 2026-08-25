@@ -1,0 +1,12 @@
+apiVersion: 1
+
+providers:
+  - name: Workforce Risk Manager
+    orgId: 1
+    folder: Workforce Risk Manager
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 10
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
