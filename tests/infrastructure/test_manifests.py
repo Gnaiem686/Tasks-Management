@@ -223,6 +223,17 @@ def test_production_has_provisional_measured_hpa_contract() -> None:
     assert "behavior" in hpa["spec"]
 
 
+def test_agent_api_replicas_are_owned_by_the_production_hpa() -> None:
+    docs = _documents(K8S / "base" / "workloads.yaml")
+    agent_api = next(
+        doc
+        for doc in docs
+        if doc["kind"] == "Deployment" and doc["metadata"]["name"] == "agent-api"
+    )
+
+    assert "replicas" not in agent_api["spec"]
+
+
 def test_no_simulator_or_kubernetes_scenario_credentials() -> None:
     manifest = _all_yaml().lower()
     forbidden = [
