@@ -181,6 +181,7 @@ jobs:
           tar -xzf release-bundle.tar.gz
           chmod 0700 deploy_release.sh
           RELEASE_DIRECTORY=\$PWD RELEASE_NAMESPACE=prod ./deploy_release.sh
+          export KUBECONFIG=/etc/kubernetes/admin.conf
           kubectl -n prod rollout status deployment/agent-api --timeout=5m
           EOF
           )

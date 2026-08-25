@@ -251,6 +251,7 @@ def test_prod_deploys_with_bash_and_only_non_destructive_verification() -> None:
     assert "AWS-RunShellScript" in text
     assert '"bash -lc " + ($script | @sh)' in text
     assert "RELEASE_NAMESPACE=prod" in text
+    assert "export KUBECONFIG=/etc/kubernetes/admin.conf" in text
     assert "rollout status" in text
     assert "alembic downgrade" not in text
     assert "kubectl delete namespace" not in text
