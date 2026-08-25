@@ -56,7 +56,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata: {name: agent-api}
 spec:
-  replicas: 1
   selector: {matchLabels: {app: agent-api}}
   template:
     metadata: {labels: {app: agent-api}}
