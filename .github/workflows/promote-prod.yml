@@ -204,7 +204,7 @@ jobs:
           test "$JIRA_MUTATION_ENABLED" = false
           curl --fail --silent --show-error --max-time 15 \
             --header "Host: $PROD_INGRESS_HOST" \
-            "$PROD_AGENT_API_BASE_URL/health" \
+            "$PROD_AGENT_API_BASE_URL/health/ready" \
             > artifacts/deployment/agent-health.json
 
       - name: Record production promotion evidence
