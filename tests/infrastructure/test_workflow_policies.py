@@ -213,6 +213,16 @@ def test_ci_runs_focused_environment_and_promotion_tests() -> None:
     assert "infrastructure-junit.xml" in text
 
 
+def test_dev_deployment_reuses_existing_immutable_sha_images() -> None:
+    text = _text("deploy-dev.yml")
+    assert "existing_digest=$(aws ecr describe-images" in text
+    assert 'if [[ "$existing_digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then' in text
+    assert 'echo "Reusing immutable image $repository@$existing_digest"' in text
+    assert 'digest="$existing_digest"' in text
+    assert "docker build" in text
+    assert "docker push" in text
+
+
 def test_prod_promotion_is_manual_approval_protected_and_serialized() -> None:
     workflow = _workflow("promote-prod.yml")
     assert "workflow_dispatch" in workflow["on"]
