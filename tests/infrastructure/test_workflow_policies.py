@@ -262,7 +262,7 @@ def test_prod_smoke_targets_the_production_ingress_host() -> None:
     text = _text("promote-prod.yml")
     assert "PROD_INGRESS_HOST: ${{ vars.PROD_INGRESS_HOST }}" in text
     assert '--header "Host: $PROD_INGRESS_HOST"' in text
-    assert '"$PROD_AGENT_API_BASE_URL/health"' in text
+    assert '"$PROD_AGENT_API_BASE_URL/health/ready"' in text
 
 
 def test_terraform_grants_environment_scoped_release_permissions() -> None:
