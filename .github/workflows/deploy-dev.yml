@@ -126,13 +126,22 @@ jobs:
           image_digests='{}'
           for service in agent-api workforce-risk-mcp devops-mcp notification-worker; do
             repository="$ECR_REGISTRY/workforce-risk/$service"
-            docker build --file "services/$service/Dockerfile" --tag "$repository:$GITHUB_SHA" .
-            docker push "$repository:$GITHUB_SHA"
-            docker inspect "$repository:$GITHUB_SHA" >/dev/null
-            digest=$(aws ecr describe-images \
+            existing_digest=$(aws ecr describe-images \
               --repository-name "workforce-risk/$service" \
               --image-ids "imageTag=$GITHUB_SHA" \
-              --query 'imageDetails[0].imageDigest' --output text)
+              --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)
+            if [[ "$existing_digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+              echo "Reusing immutable image $repository@$existing_digest"
+              digest="$existing_digest"
+            else
+              docker build --file "services/$service/Dockerfile" --tag "$repository:$GITHUB_SHA" .
+              docker push "$repository:$GITHUB_SHA"
+              docker inspect "$repository:$GITHUB_SHA" >/dev/null
+              digest=$(aws ecr describe-images \
+                --repository-name "workforce-risk/$service" \
+                --image-ids "imageTag=$GITHUB_SHA" \
+                --query 'imageDetails[0].imageDigest' --output text)
+            fi
             [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
             reference="$repository@$digest"
             image_digests=$(jq -c --arg service "$service" --arg reference "$reference" \
