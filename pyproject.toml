@@ -14,7 +14,7 @@ members = ["domain", "services/*", "packages/*"]
 [dependency-groups]
 dev = [
   "djlint>=1.36,<2",
-  "cyclonedx-bom>=5,<8",
+  "cyclonedx-bom>=5,<9",
   "mypy>=1.11,<2",
   "pip-audit>=2.7,<3",
   "playwright>=1.46,<2",
